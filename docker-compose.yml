@@ -5,7 +5,7 @@ services:
     restart: always
     environment:
       - "POSTGRES_USER=zhenxian"
-      - "POSTGRES_PASSWORD=  vbn"
+      - "POSTGRES_PASSWORD=15821828225Lzx!"
       - "POSTGRES_DB=dgelt"
     ports:
       - "5432:5432"
@@ -26,7 +26,7 @@ services:
         condition: service_healthy
     env_file: .env
     environment:
-      - "DATABASE_URL=postgresql+psycopg2://zhenxian:  vbn@db/dgelt"
+      - "DB_URL=postgresql+psycopg2://zhenxian:15821828225Lzx!@db/dgelt"
     command: python3 main_service.py
     volumes:
       - ./logs:/app/logs
@@ -40,7 +40,7 @@ services:
         condition: service_healthy
     env_file: .env
     environment:
-      - "DATABASE_URL=postgresql+psycopg2://zhenxian:  vbn@db/dgelt"
+      - "DB_URL=postgresql+psycopg2://zhenxian:15821828225Lzx!@db/dgelt"
     ports:
       - "8090:8090"
     command: python3 web/app.py
