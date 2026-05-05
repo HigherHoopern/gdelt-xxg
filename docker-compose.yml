@@ -1,0 +1,45 @@
+services:
+  db:
+    image: 1ms.docker.run/library/postgres:15
+    container_name: gdelt_db
+    environment:
+      POSTGRES_USER: zhenxian
+      POSTGRES_PASSWORD:   vbn
+      POSTGRES_DB: dgelt
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U zhenxian -d dgelt"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build: .
+    container_name: gdelt_backend
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      - DB_URL=postgresql+psycopg2://zhenxian:  vbn@db/dgelt
+    command: python3 main_service.py
+    volumes:
+      - ./logs:/app/logs
+    restart: always
+
+  frontend:
+    build: .
+    container_name: gdelt_frontend
+    depends_on:
+      - backend
+    environment:
+      - DB_URL=postgresql+psycopg2://zhenxian:  vbn@db/dgelt
+    ports:
+      - "8090:8090"
+    command: python3 web/app.py
+    restart: always
+
+volumes:
+  postgres_data:

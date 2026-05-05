@@ -1,0 +1,18 @@
+# Environments
+.env
+gdelt-risk/
+venv/
+__pycache__/
+*.pyc
+
+# Data (Too large for Git)
+GDELT_data/
+logs/
+
+# System files
+.DS_Store
+.idea/
+.vscode/
+
+# Database dumps
+*.sql.gz

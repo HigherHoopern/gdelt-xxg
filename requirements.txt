@@ -1,0 +1,14 @@
+sqlalchemy
+psycopg2-binary
+pandas
+requests
+newspaper3k
+lxml_html_clean
+scikit-learn
+gradio
+plotly
+openai
+google-generativeai
+numpy
+python-dotenv
+pyecharts
