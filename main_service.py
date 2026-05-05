@@ -50,7 +50,7 @@ def run_predictor():
 from common.models import init_db
 
 if __name__ == "__main__":
-    logger.info("=== 东盟地缘风险分析系统后台已启动 ===")
+    logger.info("=== 南亚东南亚地缘政治风险分析平台后台已启动 ===")
     
     # 核心修复：在启动所有并发线程前，先在主线程中完成数据库表结构的初始化
     # 这可以彻底避免多个线程同时执行 CREATE TABLE 导致的 PostgreSQL 唯一性违反错误
