@@ -15,4 +15,5 @@ logs/
 .vscode/
 
 # Database dumps
+*.sql
 *.sql.gz

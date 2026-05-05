@@ -18,6 +18,43 @@
 
 ---
 
+## 🚀 迁移与远程部署 (Migration & Deployment)
+
+由于 4 月份的数据（1188 条深度处理记录）和历史 GRI 分值存储在本地数据库中，建议通过以下步骤完整迁移到远程服务器：
+
+### 1. 导出本地数据
+在本地项目根目录运行：
+```bash
+chmod +x scripts/dump_db.sh
+./scripts/dump_db.sh
+```
+这将生成一个加密且压缩的 `gdelt_data_backup_YYYYMMDD.sql.gz` 文件。
+
+### 2. 同步代码
+使用 Git 将代码推送到您的 GitHub 私有仓库：
+```bash
+git add .
+git commit -m "Final version for deployment"
+git push origin main
+```
+
+### 3. 在远程服务器部署
+在远程服务器上克隆代码并恢复数据：
+1. **克隆代码**: `git clone git@github.com:HigherHoopern/gdelt-xxg.git`
+2. **传输数据**: 将本地生成的 `.sql.gz` 文件通过 `scp` 传送到服务器。
+3. **恢复数据库**:
+   ```bash
+   gunzip -c gdelt_data_backup_*.sql.gz | psql -U <username> -d <dbname>
+   ```
+4. **配置环境**: 创建 `.env` 文件并填入 API Key 和数据库连接信息。
+5. **启动服务**:
+   ```bash
+   python3 main_service.py # 启动后台监控
+   python3 run_web.py      # 启动前端界面
+   ```
+
+---
+
 ## 🛠️ 环境准备
 
 ### 1. 配置环境变量 (.env)
