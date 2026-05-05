@@ -1,6 +1,6 @@
 services:
   db:
-    image: 1ms.docker.run/library/postgres:15
+    image: docker.1ms.run/library/postgres:15
     container_name: gdelt_db
     restart: always
     environment:
