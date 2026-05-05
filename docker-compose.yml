@@ -4,13 +4,12 @@ services:
     container_name: gdelt_db
     restart: always
     environment:
-      POSTGRES_USER: zhenxian
-      POSTGRES_PASSWORD:   vbn
-      POSTGRES_DB: dgelt
+      - "POSTGRES_USER=zhenxian"
+      - "POSTGRES_PASSWORD=  vbn"
+      - "POSTGRES_DB=dgelt"
     ports:
       - "5432:5432"
     volumes:
-      # 使用宿主机目录挂载，方便您在服务器上看到物理文件
       - ./pgdata:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U zhenxian -d dgelt"]
@@ -27,7 +26,7 @@ services:
         condition: service_healthy
     env_file: .env
     environment:
-      - DATABASE_URL=postgresql+psycopg2://zhenxian:  vbn@db/dgelt
+      - "DATABASE_URL=postgresql+psycopg2://zhenxian:  vbn@db/dgelt"
     command: python3 main_service.py
     volumes:
       - ./logs:/app/logs
@@ -41,7 +40,7 @@ services:
         condition: service_healthy
     env_file: .env
     environment:
-      - DATABASE_URL=postgresql+psycopg2://zhenxian:  vbn@db/dgelt
+      - "DATABASE_URL=postgresql+psycopg2://zhenxian:  vbn@db/dgelt"
     ports:
       - "8090:8090"
     command: python3 web/app.py
