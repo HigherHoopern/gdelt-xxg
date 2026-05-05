@@ -42,5 +42,5 @@ services:
     environment:
       - "DB_URL=postgresql+psycopg2://zhenxian:15821828225Lzx!@db/dgelt"
     ports:
-      - "8090:8090"
+      - "8095:8090"
     command: python3 web/app.py
