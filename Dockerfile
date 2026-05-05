@@ -1,5 +1,5 @@
-# 使用 1ms.docker.run 镜像代理加速下载
-FROM 1ms.docker.run/library/python:3.12-slim
+# 使用 docker.1ms.run 镜像代理加速下载
+FROM docker.1ms.run/library/python:3.12-slim
 
 # 设置工作目录
 WORKDIR /app
