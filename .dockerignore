@@ -1,0 +1,13 @@
+# 忽略不需要打包进镜像的目录，防止权限错误和镜像过大
+pgdata/
+GDELT_data/
+logs/
+.git/
+gdelt-risk/
+venv/
+__pycache__/
+*.pyc
+*.sql
+*.sql.gz
+.env
+.DS_Store
