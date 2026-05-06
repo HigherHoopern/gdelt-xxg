@@ -289,7 +289,6 @@ with gr.Blocks(title="南亚东南亚地缘风险分析平台") as demo:
 if __name__ == "__main__":
     custom_theme = gr.themes.Default(primary_hue=gr.themes.Color(c50="#e6f0ff", c100="#cce0ff", c200="#99c2ff", c300="#66a3ff", c400="#3385ff", c500="#1467DF", c600="#1158c4", c700="#0d469b", c800="#0a3673", c900="#07264a", c950="#04152b"))
     demo.launch(server_name="0.0.0.0", server_port=8090, theme=custom_theme, 
-        show_api=False,
         css=f"""
         .gradio-container {{max-width: 98% !important; background-color: #f4f7f9 !important;}}
         footer {{display: none !important;}}
