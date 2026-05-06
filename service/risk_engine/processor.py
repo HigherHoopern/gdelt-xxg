@@ -67,7 +67,12 @@ class RiskProcessor:
                 ],
                 temperature=0.3
             )
-            return response.choices[0].message.content.strip()
+            # 核心修复：增加 choices 存在性检查，防止 index out of range
+            if response.choices and len(response.choices) > 0:
+                return response.choices[0].message.content.strip()
+            else:
+                logger.warning("AI 响应成功但未返回有效内容 (choices 为空)。")
+                return ""
         except Exception as e:
             logger.error(f"AI 生成失败: {e}")
             return ""
