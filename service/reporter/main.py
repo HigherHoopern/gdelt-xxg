@@ -77,10 +77,13 @@ class RiskReporter:
             
             full_report = ""
             for chunk in response:
-                if chunk.choices[0].delta.content:
-                    content = chunk.choices[0].delta.content
-                    full_report += content
-                    yield full_report # 实时产出已生成的内容
+                # 核心修复：检查 choices 是否为空，防止 list index out of range
+                if chunk.choices and len(chunk.choices) > 0:
+                    delta = chunk.choices[0].delta
+                    if delta and delta.content:
+                        content = delta.content
+                        full_report += content
+                        yield full_report # 实时产出已生成的内容
 
             # 5. 生成结束后保存报告
             new_report = RiskReport(
