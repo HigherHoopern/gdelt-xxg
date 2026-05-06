@@ -50,108 +50,95 @@ CATEGORY_TRANSLATION = {
 }
 
 def wrap_in_iframe(chart_obj, height="440px", is_plotly=False):
-    """
-    通用 Iframe 包装器，支持 ECharts 和 Plotly HTML。
-    强制使用 Base64 编码以确保 Gradio 内部渲染稳定性。
-    """
     if is_plotly:
-        # Plotly: 必须生成完整 HTML (full_html=True) 以包含 Plotly.js 库
         full_html = chart_obj.to_html(include_plotlyjs='cdn', full_html=True)
     else:
-        # ECharts
         full_html = chart_obj.render_embed()
-        
     b64_html = base64.b64encode(full_html.encode('utf-8')).decode('utf-8')
     return f'<iframe src="data:text/html;base64,{b64_html}" width="100%" height="{height}" frameborder="0" style="border-radius:10px;"></iframe>'
 
-def fetch_map_history_data():
+def fetch_history_data_unified():
+    """
+    统一获取过去 30 天的历史数据，确保地图和趋势图同步。
+    """
     session = SessionLocal()
     try:
-        start_time = datetime.datetime.now() - datetime.timedelta(days=30)
+        # 获取当前时间点，向前回溯 30 天
+        # 注意：使用 calculation_date 的最大值作为基准，或者直接使用 now()
+        now = datetime.datetime.now()
+        start_time = now - datetime.timedelta(days=30)
+        
         query = text("""
             SELECT country_code, AVG(risk_index) as risk_index, date_trunc('day', calculation_date) as d
-            FROM risk_index_history WHERE calculation_date >= :start
+            FROM risk_index_history 
+            WHERE calculation_date >= :start
             GROUP BY country_code, date_trunc('day', calculation_date)
+            ORDER BY d ASC
         """)
         raw_df = pd.read_sql(query, session.bind, params={"start": start_time})
         if raw_df.empty: return raw_df
 
-        raw_df['日期'] = (raw_df['d'] + datetime.timedelta(hours=8)).dt.strftime('%Y-%m-%d')
-        all_dates = sorted(raw_df['日期'].unique())
-        all_countries = list(COUNTRY_GEO_DATA.keys())
-        
-        index_df = pd.MultiIndex.from_product([all_dates, all_countries], names=['日期', 'country_code']).to_frame(index=False)
-        df = pd.merge(index_df, raw_df[['日期', 'country_code', 'risk_index']], on=['日期', 'country_code'], how='left')
-        df['risk_index'] = df['risk_index'].fillna(0)
-        
-        df['国家'] = df['country_code'].apply(lambda x: COUNTRY_GEO_DATA.get(x, {}).get('name', '未知'))
-        df['iso_alpha'] = df['country_code'].apply(lambda x: COUNTRY_GEO_DATA.get(x, {}).get('iso', ''))
-        df['风险等级'] = df['risk_index'].apply(lambda x: "低风险" if x <= 20 else "较低风险" if x <= 40 else "中等风险" if x <= 60 else "高风险" if x <= 80 else "极高风险")
-        return df.sort_values('日期')
+        # 统一日期格式化逻辑
+        raw_df['date_str'] = (raw_df['d'] + datetime.timedelta(hours=8)).dt.strftime('%Y-%m-%d')
+        return raw_df
     finally:
         session.close()
 
 def render_plotly_map():
-    df = fetch_map_history_data()
-    if df.empty: return "<div style='height:500px; display:flex; align-items:center; justify-content:center;'>暂无风险数据</div>"
+    raw_df = fetch_history_data_unified()
+    if raw_df.empty: return "<div style='height:500px; display:flex; align-items:center; justify-content:center;'>暂无风险数据</div>"
     
-    # 核心：确保按日期升序排列，保证动画平滑
-    df = df.sort_values('日期')
+    # 构造完整的日期-国家矩阵，确保动画滑块包含所有日期
+    all_dates = sorted(raw_df['date_str'].unique().tolist())
+    all_countries = list(COUNTRY_GEO_DATA.keys())
+    
+    index_df = pd.MultiIndex.from_product([all_dates, all_countries], names=['date_str', 'country_code']).to_frame(index=False)
+    df = pd.merge(index_df, raw_df[['date_str', 'country_code', 'risk_index']], on=['date_str', 'country_code'], how='left')
+    df['risk_index'] = df['risk_index'].fillna(0)
+    
+    df['国家'] = df['country_code'].apply(lambda x: COUNTRY_GEO_DATA.get(x, {}).get('name', '未知'))
+    df['iso_alpha'] = df['country_code'].apply(lambda x: COUNTRY_GEO_DATA.get(x, {}).get('iso', ''))
+    df['风险等级'] = df['risk_index'].apply(lambda x: "低风险" if x <= 20 else "较高风险" if x <= 40 else "中等风险" if x <= 60 else "高风险" if x <= 80 else "极高风险")
+    
+    df = df.sort_values('date_str')
     
     fig = px.choropleth(
-        df, locations="iso_alpha", color="risk_index", hover_name="国家", animation_frame="日期", 
-        hover_data={"iso_alpha": False, "risk_index": ":.2f", "日期": True, "风险等级": True},
+        df, locations="iso_alpha", color="risk_index", hover_name="国家", animation_frame="date_str", 
+        hover_data={"iso_alpha": False, "risk_index": ":.2f", "date_str": True, "风险等级": True},
         color_continuous_scale=[(0, "#2ECC71"), (0.5, "#F1C40F"), (1.0, "#E74C3C")], 
         range_color=[0, 100], scope="asia",
-        labels={'risk_index': '风险指数'}
+        labels={'risk_index': '风险指数', 'date_str': '日期'}
     )
     
     fig.update_geos(fitbounds="locations", visible=False, projection_type="mercator")
     fig.update_layout(margin={"r":0,"t":0,"l":0,"b":0}, height=500)
     
-    # 将文字标签添加到基础图层
     label_df = pd.DataFrame([{'name': v['name'], 'lat': v['lat'], 'lon': v['lon']} for v in COUNTRY_GEO_DATA.values()])
     fig.add_scattergeo(
         lat=label_df['lat'], lon=label_df['lon'], text=label_df['name'], mode='text', 
         textfont={"color": "#333", "size": 10, "family": "Arial Black"}, showlegend=False
     )
     
-    # 强制锁定每一帧的颜色映射范围
     for frame in fig.frames:
         frame.layout.coloraxis.cmin = 0
         frame.layout.coloraxis.cmax = 100
         
     return wrap_in_iframe(fig, height="500px", is_plotly=True)
 
-def fetch_time_series_data():
-    session = SessionLocal()
-    try:
-        start_time = datetime.datetime.now() - datetime.timedelta(days=30)
-        query = text("""
-            SELECT country_code, AVG(risk_index) as risk_index, date_trunc('day', calculation_date) as d
-            FROM risk_index_history WHERE calculation_date >= :start
-            GROUP BY country_code, date_trunc('day', calculation_date)
-            ORDER BY date_trunc('day', calculation_date) ASC
-        """)
-        df = pd.read_sql(query, session.bind, params={"start": start_time})
-        if not df.empty:
-            df['date'] = (df['d'] + datetime.timedelta(hours=8)).dt.strftime('%Y-%m-%d')
-        return df
-    finally:
-        session.close()
-
 def render_line(country_code=None):
-    df = fetch_time_series_data()
+    df = fetch_history_data_unified()
     if df.empty: return "<div style='height:572px; display:flex; align-items:center; justify-content:center;'>暂无历史走势数据</div>"
-    dates = sorted(df['date'].unique().tolist())
+    
+    dates = sorted(df['date_str'].unique().tolist())
     line = Line(init_opts=opts.InitOpts(width="100%", height="528px"))
     line.add_xaxis(dates)
+    
     target_countries = [country_code] if country_code else df['country_code'].unique()
     for code in target_countries:
         name = COUNTRY_GEO_DATA.get(code, {}).get('name', code)
         country_df = df[df['country_code'] == code]
         if country_df.empty: continue
-        data_map = dict(zip(country_df['date'], country_df['risk_index']))
+        data_map = dict(zip(country_df['date_str'], country_df['risk_index']))
         y_data = [round(float(data_map.get(d, 0)), 2) for d in dates]
         line.add_yaxis(name, y_data, is_smooth=True, symbol_size=4, linestyle_opts=opts.LineStyleOpts(width=1.5))
     
@@ -212,13 +199,21 @@ def render_prediction_chart(country_code=None):
 def update_dashboard(country_name):
     logger.info(f"🔄 更新仪表盘: {country_name}")
     code = next((k for k, v in COUNTRY_GEO_DATA.items() if v['name'] == country_name), None)
+    
+    # 修复：先获取统一数据
     fig_map_html = render_plotly_map()
     line_html = render_line(code)
     predict_html = render_prediction_chart(code)
     
     session = SessionLocal()
-    # 核心过滤逻辑
-    valid_filter = "(title_zh IS NOT NULL OR title IS NOT NULL) AND (summary_zh IS NOT NULL AND summary_zh != '' AND summary_zh != '[无法解析原文]')"
+    # 核心过滤逻辑：排除标题/摘要缺失、无法解析或失效的干扰信息
+    valid_filter = """
+        (title_zh IS NOT NULL OR title IS NOT NULL) 
+        AND (summary_zh IS NOT NULL AND summary_zh != '')
+        AND (title_zh NOT LIKE '%无法解析原文%')
+        AND (summary_zh NOT LIKE '%无法解析原文%')
+        AND (summary_zh NOT LIKE '%该链接已失效或被拦截%')
+    """
     where_clause = f"WHERE country_code = :code AND {valid_filter}" if code else f"WHERE {valid_filter}"
     query_news = text(f"SELECT event_date, country_code, category, title, title_zh, summary_zh, url FROM risk_analysis_data {where_clause} ORDER BY event_date DESC LIMIT 20")
     news_df = pd.read_sql(query_news, session.bind, params={"code": code} if code else {})
@@ -302,4 +297,5 @@ if __name__ == "__main__":
         #ai-report-container {{ height: 500px !important; border: 1px solid #e0e0e0; padding: 15px; border-radius: 10px; background: #ffffff; box-shadow: 0 2px 12px rgba(0,0,0,0.08); display: flex !important; flex-direction: column !important; }}
         #ai-report-scroll-area {{ flex-grow: 1 !important; height: 350px !important; overflow-y: auto !important; border-top: 1px solid #eee; margin-top: 10px; padding-top: 10px; }}
         #ai-report-box {{ min-height: 100%; font-family: sans-serif; }}
+        #news-table-wrapper {{ height: 1100px !important; max-height: 1100px !important; min-height: 1100px !important; display: block !important; }}
         """)
