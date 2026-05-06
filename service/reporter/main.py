@@ -41,28 +41,31 @@ class RiskReporter:
 
             news_text = "\n".join([f"- [{i.category}] {i.title_zh if i.title_zh else i.title}: {i.summary_zh if i.summary_zh else i.summary}" for i in news_items])
 
-            # 3. 构造提示词 - 聚焦地缘政治风险研判
+            # 3. 构造提示词 - 聚焦地缘政治风险研判，明确日期，强制 Markdown
+            today_str = datetime.datetime.now().strftime('%Y年%m月%d日')
             prompt = f"""
-            你是一位资深的地缘政治风险分析专家，请根据提供的数据对指定国家过去一周的局势进行深度研判。
+            你是一位资深的地缘政治风险分析专家。请根据以下数据，生成一份《{display_name}地缘政治风险周度研判报告》。
 
+            报告基准日期: {today_str}
             目标国家: {display_name}
             当前风险指数: {latest_idx.risk_index} (等级: {latest_idx.risk_level})
 
             过去一周核心情报摘要:
             {news_text}
 
-            请生成一份《{display_name}过去一周地缘政治风险深度研判报告》，包含以下维度：
-            1. 周期性局势回顾 (结合风险指数波动和重大事件)
-            2. 核心冲突/风险点识别 (如：主权纠纷、内政动荡、外交博弈等)
-            3. 未来短期趋势预测 (基于当前情报推演)
+            请严格按照以下 Markdown 格式生成，排版要求非常紧凑，不要有冗余的空行：
+            ### 📋 {display_name}地缘政治风险周度研判 ({today_str})
+            **1. 周期性局势回顾**：[简要结合风险指数波动和重大事件进行描述，不换行直接写]
+            **2. 核心冲突/风险点识别**：[识别主权纠纷、内政动荡或外交博弈等关键点]
+            **3. 未来短期趋势预测**：[基于当前情报的演变推演]
 
             要求：
             - 禁止提供任何“投资建议”或“中国企业建议”。
-            - 仅关注地缘政治、安全局势、外交关系等专业分析。
-            - 在报告全文中使用该国的正式中文全称（{display_name}）。
-            - 语言专业、中立、简练，字数在 600 字以内。
+            - 必须使用 Markdown 加粗和列表语法，但段落之间不要留多余空行。
+            - 全文必须使用该国的正式中文全称（{display_name}）。
+            - 报告日期必须严格锁定为：{today_str}。
+            - 语言专业、中立、极其简练，总字数控制在 400-500 字。
             """
-
             # 4. 调用 OpenAI 兼容 API 并开启流式输出 (DeepSeek-V3)
 
             response = self.client.chat.completions.create(

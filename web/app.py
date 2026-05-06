@@ -296,6 +296,9 @@ if __name__ == "__main__":
         #ai-report-container {{ height: 1000px !important; border: 1px solid #e0e0e0; padding: 15px; border-radius: 10px; background: #ffffff; box-shadow: 0 2px 12px rgba(0,0,0,0.08); display: flex !important; flex-direction: column !important; }}
         #ai-report-scroll-area {{ flex-grow: 1 !important; height: 850px !important; overflow-y: auto !important; border-top: 1px solid #eee; margin-top: 10px; padding-top: 10px; }}
 
-        #ai-report-box {{ min-height: 100%; font-family: sans-serif; }}
+        #ai-report-box {{ min-height: 100%; font-family: sans-serif; line-height: 1.5; color: #2c3e50; }}
+        #ai-report-box h3 {{ margin-top: 0; margin-bottom: 10px; color: {PRIMARY_COLOR}; border-bottom: 2px solid {PRIMARY_COLOR}; padding-bottom: 5px; }}
+        #ai-report-box p, #ai-report-box ul {{ margin-bottom: 8px !important; }}
+        #ai-report-box strong {{ color: #1a1a1a; }}
         #news-table-wrapper {{ height: 1100px !important; max-height: 1100px !important; min-height: 1100px !important; display: block !important; }}
         """)
