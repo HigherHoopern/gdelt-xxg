@@ -110,10 +110,10 @@ def render_plotly_map():
     
     fig.update_geos(fitbounds="locations", visible=False, projection_type="mercator")
     
-    # 核心需求：添加右上角标题 "风险指数动态"
+    # 核心需求：将 "风险指数动态" 标题强制固定在右上方
     fig.update_layout(
-        title={'text': "风险指数动态", 'x': 0.98, 'y': 0.96, 'xanchor': 'right', 'font': {'size': 18}},
-        margin={"r":0,"t":50,"l":0,"b":0}, height=500
+        title={'text': "风险指数动态", 'x': 0.98, 'y': 0.98, 'xanchor': 'right', 'font': {'size': 18}},
+        margin={"r":20,"t":80,"l":10,"b":0}, height=500
     )
     
     label_df = pd.DataFrame([{'name': v['name'], 'lat': v['lat'], 'lon': v['lon']} for v in COUNTRY_GEO_DATA.values()])
