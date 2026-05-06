@@ -110,9 +110,9 @@ def render_plotly_map():
     
     fig.update_geos(fitbounds="locations", visible=False, projection_type="mercator")
     
-    # 核心需求：将 "风险指数动态" 标题强制固定在右上方
+    # 核心需求：将 "风险指数动态" 标题强制固定在右上方，x=0.95
     fig.update_layout(
-        title={'text': "风险指数动态", 'x': 0.98, 'y': 0.98, 'xanchor': 'right', 'font': {'size': 18}},
+        title={'text': "风险指数动态", 'x': 0.95, 'y': 0.98, 'xanchor': 'right', 'font': {'size': 18}},
         margin={"r":20,"t":80,"l":10,"b":0}, height=500
     )
     
@@ -144,7 +144,7 @@ def render_line(country_code=None):
         line.add_yaxis(name, y_data, is_smooth=True, symbol_size=4, linestyle_opts=opts.LineStyleOpts(width=1.5))
     
     line.set_global_opts(
-        title_opts=opts.TitleOpts(title="30 天历史风险波动趋势"), 
+        title_opts=opts.TitleOpts(title="30 天历史风险波动趋势", pos_right="5%"), 
         tooltip_opts=opts.TooltipOpts(trigger="axis"),
         legend_opts=opts.LegendOpts(pos_right="2%", pos_top="middle", orient="vertical"), 
         xaxis_opts=opts.AxisOpts(name="日期"), 
@@ -186,7 +186,7 @@ def render_prediction_chart(country_code=None):
         line.add_yaxis(name, y_data, is_smooth=True, symbol_size=4, linestyle_opts=opts.LineStyleOpts(width=2.25, type_="dashed"), label_opts=opts.LabelOpts(is_show=False))
 
     line.set_global_opts(
-        title_opts=opts.TitleOpts(title="未来 5 日风险趋势预测", pos_right="2%"), 
+        title_opts=opts.TitleOpts(title="未来 5 日风险趋势预测", pos_right="5%"), 
         tooltip_opts=opts.TooltipOpts(trigger="axis", formatter=JsCode("""
                 function (params) { var res = ''; params.forEach(function (item) { if (item.value !== null && item.value !== undefined && item.value !== '') { res += item.marker + item.seriesName + ': ' + item.value + '<br/>'; } }); return res; }
             """)),
