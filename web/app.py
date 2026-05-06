@@ -63,11 +63,8 @@ def fetch_history_data_unified():
     """
     session = SessionLocal()
     try:
-        # 获取当前时间点，向前回溯 30 天
-        # 注意：使用 calculation_date 的最大值作为基准，或者直接使用 now()
         now = datetime.datetime.now()
         start_time = now - datetime.timedelta(days=30)
-        
         query = text("""
             SELECT country_code, AVG(risk_index) as risk_index, date_trunc('day', calculation_date) as d
             FROM risk_index_history 
@@ -77,8 +74,6 @@ def fetch_history_data_unified():
         """)
         raw_df = pd.read_sql(query, session.bind, params={"start": start_time})
         if raw_df.empty: return raw_df
-
-        # 统一日期格式化逻辑
         raw_df['date_str'] = (raw_df['d'] + datetime.timedelta(hours=8)).dt.strftime('%Y-%m-%d')
         return raw_df
     finally:
@@ -86,19 +81,22 @@ def fetch_history_data_unified():
 
 def render_plotly_map():
     raw_df = fetch_history_data_unified()
+    
+    # 核心修复：手动构造最近 31 天的完整日期轴，确保包含今天 (5月6日)
+    today_dt = datetime.datetime.now()
+    all_dates = [(today_dt - datetime.timedelta(days=i)).strftime('%Y-%m-%d') for i in range(31)]
+    all_dates = sorted(list(set(all_dates)))
+    
     if raw_df.empty: return "<div style='height:500px; display:flex; align-items:center; justify-content:center;'>暂无风险数据</div>"
     
-    # 构造完整的日期-国家矩阵，确保动画滑块包含所有日期
-    all_dates = sorted(raw_df['date_str'].unique().tolist())
     all_countries = list(COUNTRY_GEO_DATA.keys())
-    
     index_df = pd.MultiIndex.from_product([all_dates, all_countries], names=['date_str', 'country_code']).to_frame(index=False)
     df = pd.merge(index_df, raw_df[['date_str', 'country_code', 'risk_index']], on=['date_str', 'country_code'], how='left')
     df['risk_index'] = df['risk_index'].fillna(0)
     
     df['国家'] = df['country_code'].apply(lambda x: COUNTRY_GEO_DATA.get(x, {}).get('name', '未知'))
     df['iso_alpha'] = df['country_code'].apply(lambda x: COUNTRY_GEO_DATA.get(x, {}).get('iso', ''))
-    df['风险等级'] = df['risk_index'].apply(lambda x: "低风险" if x <= 20 else "较高风险" if x <= 40 else "中等风险" if x <= 60 else "高风险" if x <= 80 else "极高风险")
+    df['风险等级'] = df['risk_index'].apply(lambda x: "低风险" if x <= 20 else "较低风险" if x <= 40 else "中等风险" if x <= 60 else "高风险" if x <= 80 else "极高风险")
     
     df = df.sort_values('date_str')
     
@@ -111,7 +109,12 @@ def render_plotly_map():
     )
     
     fig.update_geos(fitbounds="locations", visible=False, projection_type="mercator")
-    fig.update_layout(margin={"r":0,"t":0,"l":0,"b":0}, height=500)
+    
+    # 核心需求：添加右上角标题 "风险指数动态"
+    fig.update_layout(
+        title={'text': "风险指数动态", 'x': 0.98, 'y': 0.96, 'xanchor': 'right', 'font': {'size': 18}},
+        margin={"r":0,"t":50,"l":0,"b":0}, height=500
+    )
     
     label_df = pd.DataFrame([{'name': v['name'], 'lat': v['lat'], 'lon': v['lon']} for v in COUNTRY_GEO_DATA.values()])
     fig.add_scattergeo(
@@ -128,11 +131,9 @@ def render_plotly_map():
 def render_line(country_code=None):
     df = fetch_history_data_unified()
     if df.empty: return "<div style='height:572px; display:flex; align-items:center; justify-content:center;'>暂无历史走势数据</div>"
-    
     dates = sorted(df['date_str'].unique().tolist())
     line = Line(init_opts=opts.InitOpts(width="100%", height="528px"))
     line.add_xaxis(dates)
-    
     target_countries = [country_code] if country_code else df['country_code'].unique()
     for code in target_countries:
         name = COUNTRY_GEO_DATA.get(code, {}).get('name', code)
@@ -172,11 +173,9 @@ def fetch_prediction_data_5d(country_code=None):
 def render_prediction_chart(country_code=None):
     df, today = fetch_prediction_data_5d(country_code)
     if df.empty: return "<div style='height:500px; display:flex; align-items:center; justify-content:center;'>暂无预测数据</div>"
-    
     dates_list = [(today + datetime.timedelta(days=i)).strftime('%m-%d') for i in range(6)]
     line = Line(init_opts=opts.InitOpts(width="100%", height="500px"))
     line.add_xaxis(dates_list)
-    
     target_countries = [country_code] if country_code else df['country_code'].unique()
     for code in target_countries:
         name = COUNTRY_GEO_DATA.get(code, {}).get('name', code)
@@ -187,7 +186,7 @@ def render_prediction_chart(country_code=None):
         line.add_yaxis(name, y_data, is_smooth=True, symbol_size=4, linestyle_opts=opts.LineStyleOpts(width=2.25, type_="dashed"), label_opts=opts.LabelOpts(is_show=False))
 
     line.set_global_opts(
-        title_opts=opts.TitleOpts(title="未来 5 日风险趋势预测"), 
+        title_opts=opts.TitleOpts(title="未来 5 日风险趋势预测", pos_right="2%"), 
         tooltip_opts=opts.TooltipOpts(trigger="axis", formatter=JsCode("""
                 function (params) { var res = ''; params.forEach(function (item) { if (item.value !== null && item.value !== undefined && item.value !== '') { res += item.marker + item.seriesName + ': ' + item.value + '<br/>'; } }); return res; }
             """)),
@@ -199,21 +198,12 @@ def render_prediction_chart(country_code=None):
 def update_dashboard(country_name):
     logger.info(f"🔄 更新仪表盘: {country_name}")
     code = next((k for k, v in COUNTRY_GEO_DATA.items() if v['name'] == country_name), None)
-    
-    # 修复：先获取统一数据
     fig_map_html = render_plotly_map()
     line_html = render_line(code)
     predict_html = render_prediction_chart(code)
     
     session = SessionLocal()
-    # 核心过滤逻辑：排除标题/摘要缺失、无法解析或失效的干扰信息
-    valid_filter = """
-        (title_zh IS NOT NULL OR title IS NOT NULL) 
-        AND (summary_zh IS NOT NULL AND summary_zh != '')
-        AND (title_zh NOT LIKE '%无法解析原文%')
-        AND (summary_zh NOT LIKE '%无法解析原文%')
-        AND (summary_zh NOT LIKE '%该链接已失效或被拦截%')
-    """
+    valid_filter = "(title_zh IS NOT NULL OR title IS NOT NULL) AND (summary_zh IS NOT NULL AND summary_zh != '') AND (title_zh NOT LIKE '%无法解析原文%') AND (summary_zh NOT LIKE '%无法解析原文%') AND (summary_zh NOT LIKE '%该链接已失效或被拦截%')"
     where_clause = f"WHERE country_code = :code AND {valid_filter}" if code else f"WHERE {valid_filter}"
     query_news = text(f"SELECT event_date, country_code, category, title, title_zh, summary_zh, url FROM risk_analysis_data {where_clause} ORDER BY event_date DESC LIMIT 20")
     news_df = pd.read_sql(query_news, session.bind, params={"code": code} if code else {})
@@ -289,6 +279,7 @@ with gr.Blocks(title="南亚东南亚地缘风险分析平台") as demo:
 if __name__ == "__main__":
     custom_theme = gr.themes.Default(primary_hue=gr.themes.Color(c50="#e6f0ff", c100="#cce0ff", c200="#99c2ff", c300="#66a3ff", c400="#3385ff", c500="#1467DF", c600="#1158c4", c700="#0d469b", c800="#0a3673", c900="#07264a", c950="#04152b"))
     demo.launch(server_name="0.0.0.0", server_port=8090, theme=custom_theme, 
+        auth=("kmxxg", "kmxxg&May2026"),
         css=f"""
         .gradio-container {{max-width: 98% !important; background-color: #f4f7f9 !important;}}
         footer {{display: none !important;}}
@@ -296,7 +287,6 @@ if __name__ == "__main__":
         .tabs .tabitem.selected {{ border-color: {PRIMARY_COLOR} !important; }}
         #ai-report-container {{ height: 1000px !important; border: 1px solid #e0e0e0; padding: 15px; border-radius: 10px; background: #ffffff; box-shadow: 0 2px 12px rgba(0,0,0,0.08); display: flex !important; flex-direction: column !important; }}
         #ai-report-scroll-area {{ flex-grow: 1 !important; height: 850px !important; overflow-y: auto !important; border-top: 1px solid #eee; margin-top: 10px; padding-top: 10px; }}
-
         #ai-report-box {{ min-height: 100%; font-family: sans-serif; line-height: 1.5; color: #2c3e50; }}
         #ai-report-box h3 {{ margin-top: 0; margin-bottom: 10px; color: {PRIMARY_COLOR}; border-bottom: 2px solid {PRIMARY_COLOR}; padding-bottom: 5px; }}
         #ai-report-box p, #ai-report-box ul {{ margin-bottom: 8px !important; }}
