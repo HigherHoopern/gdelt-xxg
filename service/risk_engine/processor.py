@@ -80,19 +80,26 @@ class RiskProcessor:
     def process_raw_to_business(self):
         main_session = SessionLocal()
         try:
-            # 1. 选取待处理任务 (排除已有完整翻译的)
-            query = text("""
-                SELECT DISTINCT ON (e."SOURCEURL")
-                    e."GlobalEventID", e."SOURCEURL", e."ActionGeo_CountryCode", 
-                    e."EventCode", e."GoldsteinScale", e."NumSources", e."AvgTone", e."DATEADDED",
-                    g."Themes", g."SharingImage"
-                FROM export e
-                LEFT JOIN gkg g ON e."SOURCEURL" = g."DocumentIdentifier"
-                LEFT JOIN risk_analysis_data r ON e."SOURCEURL" = r.url
-                WHERE r.url IS NULL 
-                   OR r.title_zh IS NULL OR r.title_zh = '' OR r.title_zh = '[无法解析原文]'
-                ORDER BY e."SOURCEURL", e."DATEADDED" DESC
-                LIMIT 15
+            # 1. 选取待处理任务 (优先处理最新的数据，并增加批次大小)
+            # 使用子查询先筛选最近 3 天的数据，确保查询效率并优先处理实时新闻
+            min_date = (datetime.datetime.now() - datetime.timedelta(days=3)).strftime('%Y%m%d000000')
+            
+            query = text(f"""
+                SELECT * FROM (
+                    SELECT DISTINCT ON (e."SOURCEURL")
+                        e."GlobalEventID", e."SOURCEURL", e."ActionGeo_CountryCode", 
+                        e."EventCode", e."GoldsteinScale", e."NumSources", e."AvgTone", e."DATEADDED",
+                        g."Themes", g."SharingImage"
+                    FROM export e
+                    LEFT JOIN gkg g ON e."SOURCEURL" = g."DocumentIdentifier"
+                    LEFT JOIN risk_analysis_data r ON e."SOURCEURL" = r.url
+                    WHERE (r.url IS NULL 
+                       OR r.title_zh IS NULL OR r.title_zh = '' OR r.title_zh = '[无法解析原文]')
+                       AND e."DATEADDED" >= '{min_date}'
+                    ORDER BY e."SOURCEURL", e."DATEADDED" DESC
+                ) sub
+                ORDER BY "DATEADDED" DESC
+                LIMIT 200
             """)
             tasks = main_session.execute(query).fetchall()
         finally:

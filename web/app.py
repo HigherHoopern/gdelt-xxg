@@ -82,7 +82,7 @@ def fetch_history_data_unified():
 def render_plotly_map():
     raw_df = fetch_history_data_unified()
     
-    # 核心修复：手动构造最近 31 天的完整日期轴，确保包含今天 (5月6日)
+    # 核心修复：手动构造最近 31 天的完整日期轴，确保包含当前最新日期
     today_dt = datetime.datetime.now()
     all_dates = [(today_dt - datetime.timedelta(days=i)).strftime('%Y-%m-%d') for i in range(31)]
     all_dates = sorted(list(set(all_dates)))
@@ -205,11 +205,18 @@ def update_dashboard(country_name):
     session = SessionLocal()
     valid_filter = "(title_zh IS NOT NULL OR title IS NOT NULL) AND (summary_zh IS NOT NULL AND summary_zh != '') AND (title_zh NOT LIKE '%无法解析原文%') AND (summary_zh NOT LIKE '%无法解析原文%') AND (summary_zh NOT LIKE '%该链接已失效或被拦截%')"
     where_clause = f"WHERE country_code = :code AND {valid_filter}" if code else f"WHERE {valid_filter}"
-    query_news = text(f"SELECT event_date, country_code, category, title, title_zh, summary_zh, url FROM risk_analysis_data {where_clause} ORDER BY event_date DESC LIMIT 20")
+    query_news = text(f"SELECT event_date, country_code, category, title, title_zh, summary_zh, url FROM risk_analysis_data {where_clause} ORDER BY event_date DESC LIMIT 50")
     news_df = pd.read_sql(query_news, session.bind, params={"code": code} if code else {})
     session.close()
     
+    logger.info(f"Loaded {len(news_df)} news items.")
+    
+    update_time = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     news_html = f"""
+    <div style="margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;">
+        <span style="color: #666; font-size: 14px;">📅 数据最后同步时间: {update_time} (自动更新间隔: 1分钟)</span>
+        <span style="background: {PRIMARY_COLOR}; color: white; padding: 2px 8px; border-radius: 12px; font-size: 12px;">实时同步中</span>
+    </div>
     <div style="height:1080px; overflow-y:auto; border-radius:12px; box-shadow:0 4px 16px rgba(0,0,0,0.1); background:white;">
         <table style="width:100%; border-collapse:collapse; table-layout:fixed; font-family:sans-serif;">
             <thead>
@@ -273,7 +280,7 @@ with gr.Blocks(title="南亚东南亚地缘风险分析平台") as demo:
     outputs = [map_plot, trend_box, predict_plot, news_html_box]
     demo.load(update_dashboard, inputs=[country_selector], outputs=outputs)
     country_selector.change(update_dashboard, inputs=[country_selector], outputs=outputs)
-    gr.Timer(900).tick(update_dashboard, inputs=[country_selector], outputs=outputs)
+    gr.Timer(60).tick(update_dashboard, inputs=[country_selector], outputs=outputs)
     report_btn.click(generate_report, inputs=[country_selector], outputs=[report_box])
 
 if __name__ == "__main__":

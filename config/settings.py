@@ -47,7 +47,7 @@ LLM_CONFIG = {
 
 # 5. 系统调度配置 (秒)
 SCHEDULE = {
-    'ingest_interval': int(os.getenv('INGEST_INTERVAL', 900)),
-    'process_interval': int(os.getenv('PROCESS_INTERVAL', 600)),
+    'ingest_interval': int(os.getenv('INGEST_INTERVAL', 300)),
+    'process_interval': int(os.getenv('PROCESS_INTERVAL', 60)),
     'predict_interval': int(os.getenv('PREDICT_INTERVAL', 3600))
 }
