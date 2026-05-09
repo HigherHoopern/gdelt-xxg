@@ -174,7 +174,11 @@ class RiskProcessor:
                         "content_zh": stmt.excluded.content_zh,
                         "title": stmt.excluded.title,
                         "summary": stmt.excluded.summary,
-                        "content": stmt.excluded.content
+                        "content": stmt.excluded.content,
+                        "event_date": stmt.excluded.event_date,
+                        "category": stmt.excluded.category,
+                        "weight": stmt.excluded.weight,
+                        "impact_score": stmt.excluded.impact_score
                     }
                 )
                 
