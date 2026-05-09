@@ -1,6 +1,6 @@
 services:
   db:
-    image: docker.1ms.run/library/postgres:15
+    image: postgres:15
     container_name: gdelt_db
     restart: always
     environment:
@@ -29,6 +29,7 @@ services:
       - "DB_URL=postgresql+psycopg2://zhenxian:15821828225Lzx!@db/dgelt"
     command: python3 main_service.py
     volumes:
+      - .:/app
       - ./logs:/app/logs
 
   frontend:
@@ -44,3 +45,5 @@ services:
     ports:
       - "8095:8090"
     command: python3 web/app.py
+    volumes:
+      - .:/app
