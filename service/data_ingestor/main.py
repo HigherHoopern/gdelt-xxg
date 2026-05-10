@@ -87,19 +87,19 @@ class DataIngestor:
             'ActionGeo_Lat', 'ActionGeo_Long', 'ActionGeo_FeatureID', 'DATEADDED', 'SOURCEURL'
         ]
         
-        # 过滤东盟国家
-        df_asean = df[df['ActionGeo_CountryCode'].isin(self.asean_fips)]
-        if not df_asean.empty:
+        # 全球化修改：不再过滤特定国家，收集全球数据
+        df_global = df
+        if not df_global.empty:
             from sqlalchemy.dialects.postgresql import insert
             from common.models import GdeltExport
             
             with SessionLocal() as session:
-                for _, row in df_asean.iterrows():
+                for _, row in df_global.iterrows():
                     data = row.to_dict()
                     stmt = insert(GdeltExport).values(**data).on_conflict_do_nothing(index_elements=['GlobalEventID'])
                     session.execute(stmt)
                 session.commit()
-            logger.info(f"成功入库 {len(df_asean)} 条唯一东盟出口 (Export) 记录。")
+            logger.info(f"成功入库 {len(df_global)} 条唯一全球出口 (Export) 记录。")
 
     def ingest_mentions(self, df):
         df = df.iloc[:, [0, 1, 2, 3, 4, 5, 6, 11, 12]]

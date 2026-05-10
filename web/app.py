@@ -205,7 +205,7 @@ def update_dashboard(country_name):
     session = SessionLocal()
     valid_filter = "(title_zh IS NOT NULL OR title IS NOT NULL) AND (summary_zh IS NOT NULL AND summary_zh != '') AND (title_zh NOT LIKE '%无法解析原文%') AND (summary_zh NOT LIKE '%无法解析原文%') AND (summary_zh NOT LIKE '%该链接已失效或被拦截%')"
     where_clause = f"WHERE country_code = :code AND {valid_filter}" if code else f"WHERE {valid_filter}"
-    query_news = text(f"SELECT event_date, country_code, category, title, title_zh, summary_zh, url FROM risk_analysis_data {where_clause} ORDER BY event_date DESC LIMIT 50")
+    query_news = text(f"SELECT event_date, country_code, category, title, title_zh, summary_zh, url, image_url FROM risk_analysis_data {where_clause} ORDER BY event_date DESC LIMIT 50")
     news_df = pd.read_sql(query_news, session.bind, params={"code": code} if code else {})
     session.close()
     
@@ -215,17 +215,18 @@ def update_dashboard(country_name):
     news_html = f"""
     <div style="margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;">
         <span style="color: #666; font-size: 14px;">📅 数据最后同步时间: {update_time} (自动更新间隔: 1分钟)</span>
-        <span style="background: {PRIMARY_COLOR}; color: white; padding: 2px 8px; border-radius: 12px; font-size: 12px;">实时同步中</span>
+        <span style="background: {PRIMARY_COLOR}; color: white; padding: 2px 8px; border-radius: 12px; font-size: 12px;">全球同步中</span>
     </div>
     <div style="height:1080px; overflow-y:auto; border-radius:12px; box-shadow:0 4px 16px rgba(0,0,0,0.1); background:white;">
         <table style="width:100%; border-collapse:collapse; table-layout:fixed; font-family:sans-serif;">
             <thead>
                 <tr style="background:{PRIMARY_COLOR}; color:white !important; text-align:left;">
+                    <th style="width:80px; padding:15px; color:white !important;">预览</th>
                     <th style="width:110px; padding:15px; color:white !important;">时间</th>
                     <th style="width:90px; padding:15px; color:white !important;">国家</th>
                     <th style="width:100px; padding:15px; color:white !important;">类别</th>
-                    <th style="width:30%; padding:15px; color:white !important;">标题</th>
-                    <th style="width:40%; padding:15px; color:white !important;">内容摘要</th>
+                    <th style="width:25%; padding:15px; color:white !important;">标题</th>
+                    <th style="width:35%; padding:15px; color:white !important;">内容摘要</th>
                     <th style="width:80px; padding:15px; text-align:center; color:white !important;">详情</th>
                 </tr>
             </thead>
@@ -239,8 +240,25 @@ def update_dashboard(country_name):
         title_str = str(row['title_zh']) if pd.notna(row['title_zh']) and row['title_zh'] != '' else str(row['title'])
         if title_str.lower() == 'nan': continue
         summary_str = str(row['summary_zh'])[:250] + "..."
+        
+        # 图片预览逻辑
+        img_url = row.get('image_url')
+        if pd.notna(img_url) and img_url != '':
+            img_html = f'<img src="{img_url}" style="width:60px; height:45px; object-fit:cover; border-radius:4px; cursor:pointer;" onerror="this.style.display=\'none\'">'
+        else:
+            img_html = '<div style="width:60px; height:45px; background:#eee; border-radius:4px; display:flex; align-items:center; justify-content:center; color:#999; font-size:10px;">无图</div>'
+
         link_html = f'<a href="{row["url"]}" target="_blank" style="background:{PRIMARY_COLOR}; color:white; padding:4px 10px; border-radius:4px; text-decoration:none; font-size:12px; font-weight:bold;">阅读</a>'
-        news_html += f"""<tr style="background:{bg}; border-bottom:1px solid #f0f3f5;"><td style="padding:16px 12px; color:#666; font-size:13px;">{time_str}</td><td style="padding:16px 12px;">{country_cn}</td><td style="padding:16px 12px;">{cat_cn}</td><td style="padding:16px 12px; font-weight:600;">{title_str}</td><td style="padding:16px 12px; font-size:14px;">{summary_str}</td><td style="padding:16px 12px; text-align:center;">{link_html}</td></tr>"""
+        news_html += f"""
+        <tr style="background:{bg}; border-bottom:1px solid #f0f3f5;">
+            <td style="padding:10px 12px; text-align:center;">{img_html}</td>
+            <td style="padding:16px 12px; color:#666; font-size:13px;">{time_str}</td>
+            <td style="padding:16px 12px;">{country_cn}</td>
+            <td style="padding:16px 12px;">{cat_cn}</td>
+            <td style="padding:16px 12px; font-weight:600;">{title_str}</td>
+            <td style="padding:16px 12px; font-size:14px;">{summary_str}</td>
+            <td style="padding:16px 12px; text-align:center;">{link_html}</td>
+        </tr>"""
     news_html += "</tbody></table></div>"
     
     return fig_map_html, line_html, predict_html, news_html
