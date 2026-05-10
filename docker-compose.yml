@@ -21,6 +21,8 @@ services:
     build: .
     container_name: gdelt_backend
     restart: always
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       db:
         condition: service_healthy
@@ -36,6 +38,8 @@ services:
     build: .
     container_name: gdelt_frontend
     restart: always
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       db:
         condition: service_healthy
