@@ -42,6 +42,41 @@ class RiskProcessor:
             base_url=LLM_CONFIG['base_url']
         )
 
+    def get_category(self, event_code, themes):
+        event_code = str(event_code).zfill(2)
+        themes = themes or ""
+        for cat, rules in CATEGORY_MAPPING.items():
+            if 'event_prefixes' in rules:
+                for prefix in rules['event_prefixes']:
+                    if event_code.startswith(prefix):
+                        return cat, rules['weight']
+            if 'themes' in rules:
+                for theme in rules['themes']:
+                    if theme in themes:
+                        return cat, rules['weight']
+        return 'General', 0.5
+
+    def ai_generate(self, system_prompt, user_content):
+        if not user_content or len(user_content) < 5: return ""
+        try:
+            response = self.client.chat.completions.create(
+                model=LLM_CONFIG['model_name'],
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_content}
+                ],
+                temperature=0.3
+            )
+            # 核心修复：增加 choices 存在性检查，防止 index out of range
+            if response.choices and len(response.choices) > 0:
+                return response.choices[0].message.content.strip()
+            else:
+                logger.warning("AI 响应成功但未返回有效内容 (choices 为空)。")
+                return ""
+        except Exception as e:
+            logger.error(f"AI 生成失败: {e}")
+            return ""
+
     def scrape_full_content(self, url):
         try:
             config = Config()
