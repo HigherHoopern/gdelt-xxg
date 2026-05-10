@@ -144,6 +144,12 @@ class RiskProcessor:
                     logger.info(f"{p_log} 正在翻译新闻正文全文...")
                     c_zh = self.ai_generate("将新闻全文翻译成中文。直接输出。", raw_content[:2000])
 
+                # 核心修复：检查 AI 生成的内容是否为空。如果为空（可能是 API 超时或限制），则跳过本条入库，等待下一轮重试
+                # 这样可以防止空数据占用数据库记录并被前端过滤掉
+                if not t_zh or not s_zh:
+                    logger.warning(f"⚠️ {p_log} AI 生成内容为空，跳过入库以便后续重试。")
+                    continue
+
                 # 步骤 E: 数据库写入
                 logger.info(f"{p_log} 正在执行数据库同步 (Upsert)...")
                 stmt = insert(RiskAnalysisData).values(
