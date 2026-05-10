@@ -58,9 +58,11 @@ class RiskProcessor:
     def process_raw_to_business(self):
         main_session = SessionLocal()
         try:
-            # 1. 选取待处理任务 (优先处理最新的数据，并增加批次大小)
-            # 增加了对 title_zh 的 PENDING 检查，用于重试逻辑
-            min_date = (datetime.datetime.now() - datetime.timedelta(days=3)).strftime('%Y%m%d000000')
+            # 核心优化：为了快速同步今天(5月10日)的新闻，我们将窗口缩小到最近 12 小时
+            # 这样可以跳过 5月9日的积压，直接处理最及时的信息
+            now = datetime.datetime.now()
+            min_date_dt = now - datetime.timedelta(hours=12)
+            min_date = min_date_dt.strftime('%Y%m%d%H%M%S')
             
             query = text(f"""
                 SELECT * FROM (
@@ -71,15 +73,15 @@ class RiskProcessor:
                     FROM export e
                     LEFT JOIN gkg g ON e."SOURCEURL" = g."DocumentIdentifier"
                     LEFT JOIN risk_analysis_data r ON e."SOURCEURL" = r.url
-                    WHERE (r.url IS NULL 
-                       OR r.title_zh IS NULL 
-                       OR r.title_zh = '' 
-                       OR r.title_zh LIKE '[RETRY_%]')
-                       AND e."DATEADDED" >= '{min_date}'
+                    WHERE e."DATEADDED" >= '{min_date}'
+                      AND (r.url IS NULL 
+                           OR r.title_zh IS NULL 
+                           OR r.title_zh = '' 
+                           OR r.title_zh LIKE '[RETRY_%]')
                     ORDER BY e."SOURCEURL", e."DATEADDED" DESC
                 ) sub
                 ORDER BY "DATEADDED" DESC
-                LIMIT 100
+                LIMIT 200
             """)
             tasks = main_session.execute(query).fetchall()
         finally:
