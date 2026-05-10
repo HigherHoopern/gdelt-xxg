@@ -41,12 +41,40 @@ COUNTRY_GEO_DATA = {
     'BG': {'name': '孟加拉国', 'iso': 'BGD', 'en': 'Bangladesh', 'lat': 23.6, 'lon': 90.3},
     'CE': {'name': '斯里兰卡', 'iso': 'LKA', 'en': 'Sri Lanka', 'lat': 7.8, 'lon': 80.7},
     'NP': {'name': '尼泊尔', 'iso': 'NPL', 'en': 'Nepal', 'lat': 28.3, 'lon': 84.1},
-    'BT': {'name': '不丹', 'iso': 'BTN', 'en': 'Bhutan', 'lat': 27.5, 'lon': 90.4}
+    'BT': {'name': '不丹', 'iso': 'BTN', 'lat': 27.5, 'lon': 90.4},
+    # 扩展全球大国 (FIPS)
+    'US': {'name': '美国', 'iso': 'USA'},
+    'CH': {'name': '中国', 'iso': 'CHN'},
+    'RU': {'name': '俄罗斯', 'iso': 'RUS'},
+    'GB': {'name': '英国', 'iso': 'GBR'},
+    'FR': {'name': '法国', 'iso': 'FRA'},
+    'DE': {'name': '德国', 'iso': 'DEU'},
+    'JP': {'name': '日本', 'iso': 'JPN'},
+    'KR': {'name': '韩国', 'iso': 'KOR'},
+    'BR': {'name': '巴西', 'iso': 'BRA'},
+    'AU': {'name': '澳大利亚', 'iso': 'AUS'}
 }
+
+def get_dynamic_country_choices():
+    """动态获取数据库中所有有数据的国家名称"""
+    session = SessionLocal()
+    try:
+        query = text("SELECT DISTINCT country_code FROM risk_index_history")
+        codes = [r[0] for r in session.execute(query).fetchall() if r[0]]
+        choices = ["全部"]
+        for code in sorted(codes):
+            name = COUNTRY_GEO_DATA.get(code, {}).get('name', code)
+            choices.append(name)
+        return choices
+    except:
+        return ["全部"]
+    finally:
+        session.close()
 
 CATEGORY_TRANSLATION = {
     'Military': '军事冲突', 'Political': '政治动荡', 'Economic': '经济制裁',
-    'Diplomacy': '外交纠纷', 'Social': '社会安全', 'General': '常规事务'
+    'Diplomacy': '外交纠纷', 'Social': '社会安全', 'General': '常规事务',
+    'Health': '卫生防疫', 'Environment': '生态环境', 'Tech': '科技竞争'
 }
 
 def wrap_in_iframe(chart_obj, height="440px", is_plotly=False):
@@ -79,6 +107,11 @@ def fetch_history_data_unified():
     finally:
         session.close()
 
+# 全球 FIPS 10-4 到 ISO Alpha-3 映射表 (常用国家)
+FIPS_TO_ISO = {
+    'US': 'USA', 'CH': 'CHN', 'RU': 'RUS', 'IN': 'IND', 'ID': 'IDN', 'BR': 'BRA', 'PK': 'PAK', 'NG': 'NGA', 'BD': 'BGD', 'RU': 'RUS', 'MX': 'MEX', 'JP': 'JPN', 'ET': 'ETH', 'PH': 'PHL', 'RP': 'PHL', 'EG': 'EGY', 'VN': 'VNM', 'VM': 'VNM', 'CD': 'COD', 'TR': 'TUR', 'IR': 'IRN', 'DE': 'DEU', 'TH': 'THA', 'GB': 'GBR', 'FR': 'FRA', 'IT': 'ITA', 'ZA': 'ZAF', 'MM': 'MMR', 'BM': 'MMR', 'KR': 'KOR', 'CO': 'COL', 'ES': 'ESP', 'UA': 'UKR', 'AR': 'ARG', 'DZ': 'DZA', 'PL': 'POL', 'CA': 'CAN', 'SA': 'SAU', 'UZ': 'UZB', 'MY': 'MYS', 'IQ': 'IRQ', 'AF': 'AFG', 'AFG': 'AFG', 'CB': 'KHM', 'LA': 'LAO', 'SN': 'SGP', 'BX': 'BRN', 'TT': 'TLS', 'TT': 'TLS', 'CE': 'LKA', 'NP': 'NPL', 'BT': 'BTN', 'BG': 'BGD', 'PK': 'PAK', 'IN': 'IND'
+}
+
 def render_plotly_map():
     raw_df = fetch_history_data_unified()
     
@@ -89,13 +122,15 @@ def render_plotly_map():
     
     if raw_df.empty: return "<div style='height:500px; display:flex; align-items:center; justify-content:center;'>暂无风险数据</div>"
     
-    all_countries = list(COUNTRY_GEO_DATA.keys())
+    # 全球化修改：从数据中提取所有出现的国家，而不是仅限于 ASEAN
+    all_countries = list(raw_df['country_code'].unique())
     index_df = pd.MultiIndex.from_product([all_dates, all_countries], names=['date_str', 'country_code']).to_frame(index=False)
     df = pd.merge(index_df, raw_df[['date_str', 'country_code', 'risk_index']], on=['date_str', 'country_code'], how='left')
     df['risk_index'] = df['risk_index'].fillna(0)
     
-    df['国家'] = df['country_code'].apply(lambda x: COUNTRY_GEO_DATA.get(x, {}).get('name', '未知'))
-    df['iso_alpha'] = df['country_code'].apply(lambda x: COUNTRY_GEO_DATA.get(x, {}).get('iso', ''))
+    # 映射国家名称和 ISO 代码
+    df['国家'] = df['country_code'].apply(lambda x: COUNTRY_GEO_DATA.get(x, {}).get('name', x))
+    df['iso_alpha'] = df['country_code'].apply(lambda x: FIPS_TO_ISO.get(x, x)) # 优先从映射表找，找不到用原码
     df['风险等级'] = df['risk_index'].apply(lambda x: "低风险" if x <= 20 else "较低风险" if x <= 40 else "中等风险" if x <= 60 else "高风险" if x <= 80 else "极高风险")
     
     df = df.sort_values('date_str')
@@ -104,22 +139,21 @@ def render_plotly_map():
         df, locations="iso_alpha", color="risk_index", hover_name="国家", animation_frame="date_str", 
         hover_data={"iso_alpha": False, "risk_index": ":.2f", "date_str": True, "风险等级": True},
         color_continuous_scale=[(0, "#2ECC71"), (0.5, "#F1C40F"), (1.0, "#E74C3C")], 
-        range_color=[0, 100], scope="asia",
+        range_color=[0, 100], scope="world", # 修改为世界范围
         labels={'risk_index': '风险指数', 'date_str': '日期'}
     )
     
-    fig.update_geos(fitbounds="locations", visible=False, projection_type="mercator")
-    
-    # 核心需求：将 "风险指数动态" 标题强制固定在右上方，x=0.95
-    fig.update_layout(
-        title={'text': "风险指数动态", 'x': 0.95, 'y': 0.98, 'xanchor': 'right', 'font': {'size': 18}},
-        margin={"r":20,"t":80,"l":10,"b":0}, height=500
+    # 采用自然地球投影，视觉效果更好
+    fig.update_geos(
+        visible=True, 
+        projection_type="natural earth",
+        showcountries=True, 
+        countrycolor="RebeccaPurple"
     )
     
-    label_df = pd.DataFrame([{'name': v['name'], 'lat': v['lat'], 'lon': v['lon']} for v in COUNTRY_GEO_DATA.values()])
-    fig.add_scattergeo(
-        lat=label_df['lat'], lon=label_df['lon'], text=label_df['name'], mode='text', 
-        textfont={"color": "#333", "size": 10, "family": "Arial Black"}, showlegend=False
+    fig.update_layout(
+        title={'text': "全球风险指数动态", 'x': 0.95, 'y': 0.98, 'xanchor': 'right', 'font': {'size': 18}},
+        margin={"r":20,"t":80,"l":10,"b":0}, height=500
     )
     
     for frame in fig.frames:
@@ -274,9 +308,9 @@ def generate_report(country_name):
 with gr.Blocks(title="南亚东南亚地缘风险分析平台") as demo:
     with gr.Row(variant="compact"):
         with gr.Column(scale=5): 
-            gr.Markdown("# 南亚东南亚地缘政治风险分析平台")
+            gr.Markdown("# 全球地缘政治风险分析平台")
         with gr.Column(scale=1): 
-            country_selector = gr.Dropdown(choices=["全部"] + [v['name'] for v in COUNTRY_GEO_DATA.values()], value="全部", label="🌐 全局筛选", container=False)
+            country_selector = gr.Dropdown(choices=get_dynamic_country_choices(), value="全部", label="🌐 全球筛选", container=False)
 
     with gr.Tabs():
         with gr.TabItem("📊 风险监测面板"):

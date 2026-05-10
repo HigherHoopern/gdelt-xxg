@@ -58,8 +58,14 @@ class GRICalculator:
                 "end_time": calc_now
             }).fetchall()
             
-            # 获取所有国家列表，用于衰减计算
-            all_country_codes = [v['fips'] for v in REGIONAL_COUNTRIES.values()]
+            # 全球化修改：获取数据库中所有活跃的国家代码（包括有新闻的和有历史记录的）
+            query_all_countries = text("""
+                SELECT DISTINCT country_code FROM risk_analysis_data 
+                UNION 
+                SELECT DISTINCT country_code FROM risk_index_history
+            """)
+            all_country_codes = [r[0] for r in session.execute(query_all_countries).fetchall() if r[0]]
+            
             results_map = {row[0]: row for row in results if row[0]}
 
             for country_code in all_country_codes:
