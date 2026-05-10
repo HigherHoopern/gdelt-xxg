@@ -37,9 +37,12 @@ class GRICalculator:
         """
         session = SessionLocal()
         try:
-            calc_now = base_time if base_time else datetime.datetime.now()
+            # 性能优化：截断到分钟，防止微秒级重复
+            now_dt = datetime.datetime.now()
+            calc_now = base_time if base_time else now_dt.replace(second=0, microsecond=0)
             start_time = calc_now - datetime.timedelta(hours=lookback_hours)
             
+            # 1. 获取最新处理过的数据
             query = text("""
                 SELECT 
                     country_code,
@@ -55,18 +58,33 @@ class GRICalculator:
                 "end_time": calc_now
             }).fetchall()
             
-            if not results or (len(results) == 1 and results[0][0] is None):
-                return
+            # 获取所有国家列表，用于衰减计算
+            all_country_codes = [v['fips'] for v in REGIONAL_COUNTRIES.values()]
+            results_map = {row[0]: row for row in results if row[0]}
 
-            for row in results:
-                country_code, raw_score, event_count = row
-                if country_code is None: continue
+            for country_code in all_country_codes:
+                row = results_map.get(country_code)
                 
-                gri_score = min(100.0, (float(raw_score) / NORMALIZATION_FACTOR) * 100.0)
+                if row:
+                    _, raw_score, event_count = row
+                    gri_score = min(100.0, (float(raw_score) / NORMALIZATION_FACTOR) * 100.0)
+                else:
+                    # 核心优化：衰减逻辑。如果没有新数据，参考上一条历史记录并衰减 10%
+                    # 这保证了风险曲线的连续性，不会突降到 0
+                    last_hist = session.query(RiskIndexHistory).filter(
+                        RiskIndexHistory.country_code == country_code
+                    ).order_by(RiskIndexHistory.calculation_date.desc()).first()
+                    
+                    if last_hist and last_hist.risk_index > 5:
+                        gri_score = float(last_hist.risk_index) * 0.9  # 衰减 10%
+                        event_count = 0
+                    else:
+                        gri_score = 0.0
+                        event_count = 0
+                
                 risk_level = self.get_risk_level(gri_score)
                 
-                # 3. 保存至历史记录表 (增加冲突处理，确保重算时覆盖旧点)
-                # 为简化，这里先检查是否存在
+                # 3. 保存至历史记录表 (Upsert 逻辑)
                 existing_hist = session.query(RiskIndexHistory).filter(
                     RiskIndexHistory.country_code == country_code,
                     RiskIndexHistory.calculation_date == calc_now

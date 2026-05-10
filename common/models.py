@@ -9,7 +9,7 @@ Base = declarative_base()
 class GdeltExport(Base):
     __tablename__ = 'export'
     id = Column(BigInteger, primary_key=True, autoincrement=True)
-    GlobalEventID = Column(BigInteger, index=True)
+    GlobalEventID = Column(BigInteger, index=True, unique=True)
     Day = Column(Integer)
     MonthYear = Column(Integer)
     Year = Column(Integer)
@@ -55,11 +55,12 @@ class GdeltMention(Base):
     MentionDocLen = Column(Integer)
     MentionDocTone = Column(Numeric)
     created_at = Column(DateTime, default=datetime.datetime.now)
+    __table_args__ = (Index('idx_mention_unique', "GlobalEventID", "MentionIdentifier", unique=True),)
 
 class GdeltGKG(Base):
     __tablename__ = 'gkg'
     id = Column(BigInteger, primary_key=True, autoincrement=True)
-    GKGRECORDID = Column(Text, index=True) # 改为 TEXT
+    GKGRECORDID = Column(Text, index=True, unique=True) # 改为 TEXT
     DATE = Column(BigInteger)
     SourceCollectionIdentifier = Column(Integer)
     SourceCommonName = Column(Text) # 改为 TEXT

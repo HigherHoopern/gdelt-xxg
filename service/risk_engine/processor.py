@@ -25,6 +25,15 @@ CATEGORY_MAPPING = {
     'Social': {'weight': 0.8, 'themes': ['SOCIETY', 'PROTEST', 'STRIKE']},
 }
 
+import random
+
+# User-Agent 池
+USER_AGENTS = [
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
+]
+
 class RiskProcessor:
     def __init__(self):
         # 初始化 OpenAI 兼容客户端用于翻译与补全 (SiliconFlow)
@@ -33,55 +42,24 @@ class RiskProcessor:
             base_url=LLM_CONFIG['base_url']
         )
 
-    def get_category(self, event_code, themes):
-        event_code = str(event_code).zfill(2)
-        themes = themes or ""
-        for cat, rules in CATEGORY_MAPPING.items():
-            if 'event_prefixes' in rules:
-                for prefix in rules['event_prefixes']:
-                    if event_code.startswith(prefix):
-                        return cat, rules['weight']
-            if 'themes' in rules:
-                for theme in rules['themes']:
-                    if theme in themes:
-                        return cat, rules['weight']
-        return 'General', 0.5
-
     def scrape_full_content(self, url):
         try:
-            article = Article(url, config=crawler_config)
+            config = Config()
+            config.browser_user_agent = random.choice(USER_AGENTS)
+            config.request_timeout = 20
+            article = Article(url, config=config)
             article.download()
             article.parse()
             return article.title or "", article.summary or "", article.text or ""
-        except Exception:
-            return "", "", ""
-
-    def ai_generate(self, system_prompt, user_content):
-        if not user_content or len(user_content) < 5: return ""
-        try:
-            response = self.client.chat.completions.create(
-                model=LLM_CONFIG['model_name'],
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_content}
-                ],
-                temperature=0.3
-            )
-            # 核心修复：增加 choices 存在性检查，防止 index out of range
-            if response.choices and len(response.choices) > 0:
-                return response.choices[0].message.content.strip()
-            else:
-                logger.warning("AI 响应成功但未返回有效内容 (choices 为空)。")
-                return ""
         except Exception as e:
-            logger.error(f"AI 生成失败: {e}")
-            return ""
+            logger.warning(f"解析 URL 失败: {url}, 错误: {e}")
+            return "", "", ""
 
     def process_raw_to_business(self):
         main_session = SessionLocal()
         try:
             # 1. 选取待处理任务 (优先处理最新的数据，并增加批次大小)
-            # 使用子查询先筛选最近 3 天的数据，确保查询效率并优先处理实时新闻
+            # 增加了对 title_zh 的 PENDING 检查，用于重试逻辑
             min_date = (datetime.datetime.now() - datetime.timedelta(days=3)).strftime('%Y%m%d000000')
             
             query = text(f"""
@@ -89,17 +67,19 @@ class RiskProcessor:
                     SELECT DISTINCT ON (e."SOURCEURL")
                         e."GlobalEventID", e."SOURCEURL", e."ActionGeo_CountryCode", 
                         e."EventCode", e."GoldsteinScale", e."NumSources", e."AvgTone", e."DATEADDED",
-                        g."Themes", g."SharingImage"
+                        g."Themes", g."SharingImage", r.title_zh as current_status
                     FROM export e
                     LEFT JOIN gkg g ON e."SOURCEURL" = g."DocumentIdentifier"
                     LEFT JOIN risk_analysis_data r ON e."SOURCEURL" = r.url
                     WHERE (r.url IS NULL 
-                       OR r.title_zh IS NULL OR r.title_zh = '' OR r.title_zh = '[无法解析原文]')
+                       OR r.title_zh IS NULL 
+                       OR r.title_zh = '' 
+                       OR r.title_zh LIKE '[RETRY_%]')
                        AND e."DATEADDED" >= '{min_date}'
                     ORDER BY e."SOURCEURL", e."DATEADDED" DESC
                 ) sub
                 ORDER BY "DATEADDED" DESC
-                LIMIT 200
+                LIMIT 100
             """)
             tasks = main_session.execute(query).fetchall()
         finally:
@@ -113,7 +93,16 @@ class RiskProcessor:
 
         for idx, task in enumerate(tasks, 1):
             url = task[1]
+            status = task[10] or ""
             p_log = f"[{idx}/{total}]"
+            
+            # 解析重试次数
+            retry_count = 0
+            if "[RETRY_" in status:
+                try:
+                    retry_count = int(status.split("_")[1].split("]")[0])
+                except: retry_count = 0
+
             try:
                 # 步骤 A: 网页解析
                 logger.info(f"{p_log} 正在解析 URL: {url[:50]}...")
@@ -121,33 +110,20 @@ class RiskProcessor:
                 raw_title, raw_summary, raw_content = self.scrape_full_content(url)
                 
                 if not raw_content:
-                    logger.warning(f"{p_log} 原文内容获取失败，将记录为空占位符。")
-                    t_zh, s_zh, c_zh = "[无法解析原文]", "[该链接已失效或被拦截]", ""
+                    if retry_count < 3:
+                        logger.warning(f"{p_log} 内容解析失败，标记为重试 ({retry_count + 1}/3)")
+                        t_zh, s_zh, c_zh = f"[RETRY_{retry_count + 1}]", "", ""
+                    else:
+                        logger.error(f"{p_log} 达到最大重试次数，标记为解析失败。")
+                        t_zh, s_zh, c_zh = "[无法解析原文]", "[该链接已失效或被拦截]", ""
                 else:
-                    # 步骤 B: AI 标题处理
-                    if raw_title:
-                        logger.info(f"{p_log} 正在翻译新闻标题...")
-                        t_zh = self.ai_generate("翻译标题为中文。直接输出。", raw_title)
-                    else:
-                        logger.info(f"{p_log} 原标题缺失，正在根据正文生成新标题...")
-                        t_zh = self.ai_generate("根据正文总结一个20字以内的中文标题。", raw_content[:300])
-                    
-                    # 步骤 C: AI 摘要处理
-                    if raw_summary:
-                        logger.info(f"{p_log} 正在翻译原文摘要...")
-                        s_zh = self.ai_generate("翻译摘要为中文。直接输出。", raw_summary)
-                    else:
-                        logger.info(f"{p_log} 原摘要缺失，正在根据正文总结摘要...")
-                        s_zh = self.ai_generate("根据正文撰写100字以内的中文摘要。", raw_content[:2000])
-                    
-                    # 步骤 D: 全文翻译
-                    logger.info(f"{p_log} 正在翻译新闻正文全文...")
+                    # 步骤 B: AI 处理 (略过已有的逻辑...)
+                    t_zh = self.ai_generate("翻译标题为中文。直接输出。", raw_title) if raw_title else self.ai_generate("根据正文总结一个20字以内的中文标题。", raw_content[:300])
+                    s_zh = self.ai_generate("翻译摘要为中文。直接输出。", raw_summary) if raw_summary else self.ai_generate("根据正文撰写100字以内的中文摘要。", raw_content[:2000])
                     c_zh = self.ai_generate("将新闻全文翻译成中文。直接输出。", raw_content[:2000])
 
-                # 核心修复：检查 AI 生成的内容是否为空。如果为空（可能是 API 超时或限制），则跳过本条入库，等待下一轮重试
-                # 这样可以防止空数据占用数据库记录并被前端过滤掉
                 if not t_zh or not s_zh:
-                    logger.warning(f"⚠️ {p_log} AI 生成内容为空，跳过入库以便后续重试。")
+                    # AI 失败但不更新状态，让它下一轮重试
                     continue
 
                 # 步骤 E: 数据库写入

@@ -75,7 +75,7 @@ class DataIngestor:
             logger.error(f"处理 {table_type} 文件失败: {e}")
 
     def ingest_export(self, df):
-        # 映射 Export 的 61 列中的关键列（根据文档）
+        # 映射 Export 的 61 列中的关键列
         df = df.iloc[:, [0, 1, 2, 3, 4, 5, 6, 7, 15, 16, 17, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 51, 52, 53, 54, 56, 57, 58, 59, 60]]
         df.columns = [
             'GlobalEventID', 'Day', 'MonthYear', 'Year', 'FractionDate', 
@@ -90,9 +90,16 @@ class DataIngestor:
         # 过滤东盟国家
         df_asean = df[df['ActionGeo_CountryCode'].isin(self.asean_fips)]
         if not df_asean.empty:
+            from sqlalchemy.dialects.postgresql import insert
+            from common.models import GdeltExport
+            
             with SessionLocal() as session:
-                df_asean.to_sql('export', session.bind, if_exists='append', index=False)
-            logger.info(f"成功入库 {len(df_asean)} 条东盟出口 (Export) 记录。")
+                for _, row in df_asean.iterrows():
+                    data = row.to_dict()
+                    stmt = insert(GdeltExport).values(**data).on_conflict_do_nothing(index_elements=['GlobalEventID'])
+                    session.execute(stmt)
+                session.commit()
+            logger.info(f"成功入库 {len(df_asean)} 条唯一东盟出口 (Export) 记录。")
 
     def ingest_mentions(self, df):
         df = df.iloc[:, [0, 1, 2, 3, 4, 5, 6, 11, 12]]
@@ -100,21 +107,35 @@ class DataIngestor:
             'GlobalEventID', 'EventTimeDate', 'MentionTimeDate', 'MentionType', 
             'MentionSourceName', 'MentionIdentifier', 'SentenceID', 'Confidence', 'MentionDocTone'
         ]
+        from sqlalchemy.dialects.postgresql import insert
+        from common.models import GdeltMention
+        
         with SessionLocal() as session:
-            df.to_sql('mentions', session.bind, if_exists='append', index=False)
-        logger.info(f"成功入库 {len(df)} 条提及 (Mentions) 记录。")
+            # 批量 Upsert 优化性能
+            for _, row in df.iterrows():
+                data = row.to_dict()
+                stmt = insert(GdeltMention).values(**data).on_conflict_do_nothing(index_elements=['GlobalEventID', 'MentionIdentifier'])
+                session.execute(stmt)
+            session.commit()
+        logger.info(f"成功入库 {len(df)} 条唯一提及 (Mentions) 记录。")
 
     def ingest_gkg(self, df):
-        # GKG 字段
         df = df.iloc[:, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 18, 25]]
         df.columns = [
             'GKGRECORDID', 'DATE', 'SourceCollectionIdentifier', 'SourceCommonName', 'DocumentIdentifier',
             'Counts', 'V2Counts', 'Themes', 'V2Themes', 'Locations', 'V2Locations', 
             'Persons', 'V2Persons', 'Organizations', 'V2Organizations', 'V2Tone', 'SharingImage', 'TranslationInfo'
         ]
+        from sqlalchemy.dialects.postgresql import insert
+        from common.models import GdeltGKG
+        
         with SessionLocal() as session:
-            df.to_sql('gkg', session.bind, if_exists='append', index=False)
-        logger.info(f"成功入库 {len(df)} 条全球知识图谱 (GKG) 记录。")
+            for _, row in df.iterrows():
+                data = row.to_dict()
+                stmt = insert(GdeltGKG).values(**data).on_conflict_do_nothing(index_elements=['GKGRECORDID'])
+                session.execute(stmt)
+            session.commit()
+        logger.info(f"成功入库 {len(df)} 条唯一知识图谱 (GKG) 记录。")
 
     def run(self):
         logger.info("数据采集服务已启动。")
