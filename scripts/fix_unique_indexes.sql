@@ -4,18 +4,18 @@
 
 BEGIN;
 
--- 1. 修复 export 表
--- 必须先删除已存在的非唯一索引，否则创建唯一索引会冲突或导致 ON CONFLICT 匹配失败
+-- 1. 再次强制清理 export 表重复项（保留 ID 最大的）
+DELETE FROM export a USING export b WHERE a.id < b.id AND a."GlobalEventID" = b."GlobalEventID";
 DROP INDEX IF EXISTS "ix_export_GlobalEventID";
 CREATE UNIQUE INDEX IF NOT EXISTS idx_export_global_unique ON export ("GlobalEventID");
 
--- 2. 修复 mentions 表
--- 删除旧的单列非唯一索引，创建复合唯一索引
+-- 2. 再次强制清理 mentions 表重复项
+DELETE FROM mentions a USING mentions b WHERE a.id < b.id AND a."GlobalEventID" = b."GlobalEventID" AND a."MentionIdentifier" = b."MentionIdentifier";
 DROP INDEX IF EXISTS "ix_mentions_GlobalEventID";
 CREATE UNIQUE INDEX IF NOT EXISTS idx_mention_unique ON mentions ("GlobalEventID", "MentionIdentifier");
 
--- 3. 修复 gkg 表
--- 删除旧的非唯一索引，创建唯一索引
+-- 3. 再次强制清理 gkg 表重复项
+DELETE FROM gkg a USING gkg b WHERE a.id < b.id AND a."GKGRECORDID" = b."GKGRECORDID";
 DROP INDEX IF EXISTS "ix_gkg_GKGRECORDID";
 CREATE UNIQUE INDEX IF NOT EXISTS idx_gkg_record_unique ON gkg ("GKGRECORDID");
 
