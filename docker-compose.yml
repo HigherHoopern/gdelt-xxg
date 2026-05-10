@@ -1,7 +1,7 @@
 services:
-  db:
+  global_db:
     image: docker.1ms.run/library/postgres:15
-    container_name: gdelt_db
+    container_name: gdelt_global_db
     restart: always
     environment:
       - "POSTGRES_USER=zhenxian"
@@ -16,38 +16,48 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - global_network
 
-  backend:
+  global_backend:
     build: .
-    container_name: gdelt_backend
+    container_name: gdelt_global_backend
     restart: always
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
-      db:
+      global_db:
         condition: service_healthy
     env_file: .env
     environment:
-      - "DB_URL=postgresql+psycopg2://zhenxian:15821828225Lzx!@db/dgelt"
+      - "DB_URL=postgresql+psycopg2://zhenxian:15821828225Lzx!@global_db/dgelt"
     command: python3 main_service.py
     volumes:
       - .:/app
       - ./logs:/app/logs
+    networks:
+      - global_network
 
-  frontend:
+  global_frontend:
     build: .
-    container_name: gdelt_frontend
+    container_name: gdelt_global_frontend
     restart: always
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
-      db:
+      global_db:
         condition: service_healthy
     env_file: .env
     environment:
-      - "DB_URL=postgresql+psycopg2://zhenxian:15821828225Lzx!@db/dgelt"
+      - "DB_URL=postgresql+psycopg2://zhenxian:15821828225Lzx!@global_db/dgelt"
     ports:
       - "8095:8090"
     command: python3 web/app.py
     volumes:
       - .:/app
+    networks:
+      - global_network
+
+networks:
+  global_network:
+    name: gdelt_global_network
