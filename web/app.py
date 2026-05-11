@@ -291,6 +291,7 @@ def render_prediction_chart(country_name="全部", continent_name="全部"):
     return wrap_in_iframe(line, height="500px")
 
 def update_dashboard(country_name="全部", continent_name="全部", search_keyword=""):
+    search_keyword = search_keyword or ""
     logger.info(f"🔄 更新仪表盘: {country_name}, {continent_name}, 搜索: {search_keyword}")
     
     # 映射国家代码
@@ -432,7 +433,7 @@ with gr.Blocks(title="南亚东南亚地缘风险分析平台") as demo:
     outputs = [map_plot, trend_box, predict_plot, news_html_box]
     
     # 定义更新逻辑
-    def on_geo_change(continent, country):
+    def on_geo_change(continent):
         # 当洲改变时，动态更新国家列表
         new_choices = get_dynamic_country_choices(continent)
         return gr.update(choices=new_choices, value="全部")
