@@ -302,14 +302,14 @@ def update_dashboard(country_name="全部", continent_name="全部", search_keyw
     predict_html = render_prediction_chart(country_name, continent_name)
     
     session = SessionLocal()
-    # 核心需求：过去 3 天的新闻
-    three_days_ago = datetime.datetime.now() - datetime.timedelta(days=3)
+    # 核心优化：为了防止页面崩溃，我们将窗口缩小到 24 小时，并减少单页显示
+    since_time = datetime.datetime.now() - datetime.timedelta(hours=24)
     
     valid_filter = "(title_zh IS NOT NULL OR title IS NOT NULL) AND (summary_zh IS NOT NULL AND summary_zh != '') AND (title_zh NOT LIKE '%无法解析原文%')"
     
     # 构建搜索子句
     search_clause = ""
-    params = {"since": three_days_ago}
+    params = {"since": since_time}
     
     if search_keyword and search_keyword.strip():
         search_clause = f"AND (title_zh ILIKE :kw OR summary_zh ILIKE :kw OR title ILIKE :kw)"
@@ -333,7 +333,7 @@ def update_dashboard(country_name="全部", continent_name="全部", search_keyw
         SELECT event_date, country_code, category, title, title_zh, summary_zh, url, image_url 
         FROM risk_analysis_data 
         WHERE event_date >= :since AND {valid_filter} {geo_clause} {search_clause}
-        ORDER BY event_date DESC LIMIT 50
+        ORDER BY event_date DESC LIMIT 20
     """)
     
     news_df = pd.read_sql(query_news, session.bind, params=params)
@@ -342,7 +342,7 @@ def update_dashboard(country_name="全部", continent_name="全部", search_keyw
     update_time = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     news_html = f"""
     <div style="margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;">
-        <span style="color: #666; font-size: 14px;">📅 数据同步时间: {update_time} (仅显示过去3天新闻)</span>
+        <span style="color: #666; font-size: 14px;">📅 数据同步时间: {update_time} (仅显示过去24小时新闻)</span>
         <span style="background: {PRIMARY_COLOR}; color: white; padding: 2px 8px; border-radius: 12px; font-size: 12px;">全球实时同步</span>
     </div>
     <div style="height:1080px; overflow-y:auto; border-radius:12px; box-shadow:0 4px 16px rgba(0,0,0,0.1); background:white;">
