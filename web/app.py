@@ -403,8 +403,13 @@ def generate_report(country_name):
         reporter = RiskReporter()
         for chunk in reporter.generate_country_report(code, country_name=country_name): yield chunk
 
+# 加载外部 HTML/CSS 模板
+html_path = os.path.join(os.path.dirname(__file__), "index.html")
+with open(html_path, "r", encoding="utf-8") as f:
+    HTML_TEMPLATE = f.read()
+
 # Gradio 界面
-with gr.Blocks(title="南亚东南亚地缘风险分析平台") as demo:
+with gr.Blocks(title="全球地缘风险分析平台", head=HTML_TEMPLATE) as demo:
     with gr.Row(variant="compact"):
         with gr.Column(scale=4): 
             gr.Markdown("# 🌍 全球地缘政治风险分析平台")
@@ -469,17 +474,4 @@ with gr.Blocks(title="南亚东南亚地缘风险分析平台") as demo:
 
 if __name__ == "__main__":
     custom_theme = gr.themes.Default(primary_hue=gr.themes.Color(c50="#e6f0ff", c100="#cce0ff", c200="#99c2ff", c300="#66a3ff", c400="#3385ff", c500="#1467DF", c600="#1158c4", c700="#0d469b", c800="#0a3673", c900="#07264a", c950="#04152b"))
-    demo.launch(server_name="0.0.0.0", server_port=8090, theme=custom_theme, 
-        css=f"""
-        .gradio-container {{max-width: 98% !important; background-color: #f4f7f9 !important;}}
-        footer {{display: none !important;}}
-        button.primary, .gr-button-primary {{ background-color: {PRIMARY_COLOR} !important; border-color: {PRIMARY_COLOR} !important; color: white !important; }}
-        .tabs .tabitem.selected {{ border-color: {PRIMARY_COLOR} !important; }}
-        #ai-report-container {{ height: 1000px !important; border: 1px solid #e0e0e0; padding: 15px; border-radius: 10px; background: #ffffff; box-shadow: 0 2px 12px rgba(0,0,0,0.08); display: flex !important; flex-direction: column !important; }}
-        #ai-report-scroll-area {{ flex-grow: 1 !important; height: 850px !important; overflow-y: auto !important; border-top: 1px solid #eee; margin-top: 10px; padding-top: 10px; }}
-        #ai-report-box {{ min-height: 100%; font-family: sans-serif; line-height: 1.5; color: #2c3e50; }}
-        #ai-report-box h3 {{ margin-top: 0; margin-bottom: 10px; color: {PRIMARY_COLOR}; border-bottom: 2px solid {PRIMARY_COLOR}; padding-bottom: 5px; }}
-        #ai-report-box p, #ai-report-box ul {{ margin-bottom: 8px !important; }}
-        #ai-report-box strong {{ color: #1a1a1a; }}
-        #news-table-wrapper {{ height: 1100px !important; max-height: 1100px !important; min-height: 1100px !important; display: block !important; }}
-        """)
+    demo.launch(server_name="0.0.0.0", server_port=8090, theme=custom_theme)

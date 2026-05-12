@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <style>
+        /* 全局样式 */
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        .gradio-container { max-width: 98% !important; background-color: #f4f7f9 !important; }
+        footer { display: none !important; }
+        
+        /* 按钮与交互 */
+        button.primary, .gr-button-primary { 
+            background-color: #1467DF !important; 
+            border-color: #1467DF !important; 
+            color: white !important; 
+        }
+        .tabs .tabitem.selected { border-color: #1467DF !important; }
+        
+        /* AI 报告区域 */
+        #ai-report-container { 
+            height: 1000px !important; 
+            border: 1px solid #e0e0e0; 
+            padding: 15px; 
+            border-radius: 10px; 
+            background: #ffffff; 
+            box-shadow: 0 2px 12px rgba(0,0,0,0.08); 
+            display: flex !important; 
+            flex-direction: column !important; 
+        }
+        #ai-report-scroll-area { 
+            flex-grow: 1 !important; 
+            height: 850px !important; 
+            overflow-y: auto !important; 
+            border-top: 1px solid #eee; 
+            margin-top: 10px; 
+            padding-top: 10px; 
+        }
+        #ai-report-box { 
+            min-height: 100%; 
+            font-family: sans-serif; 
+            line-height: 1.5; 
+            color: #2c3e50; 
+        }
+        #ai-report-box h3 { 
+            margin-top: 0; 
+            margin-bottom: 10px; 
+            color: #1467DF; 
+            border-bottom: 2px solid #1467DF; 
+            padding-bottom: 5px; 
+        }
+        #ai-report-box p, #ai-report-box ul { margin-bottom: 8px !important; }
+        #ai-report-box strong { color: #1a1a1a; }
+        
+        /* 实时新闻表格包装器 */
+        #news-table-wrapper { 
+            height: 1100px !important; 
+            max-height: 1100px !important; 
+            min-height: 1100px !important; 
+            display: block !important; 
+        }
+        
+        /* 优化表格滚动条 */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; }
+        ::-webkit-scrollbar-thumb { background: #ccc; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #aaa; }
+    </style>
+</head>
+<body>
+    <!-- 此文件主要用于存放样式和头部，Gradio 依然控制主体结构 -->
+</body>
+</html>
