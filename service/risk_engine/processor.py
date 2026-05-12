@@ -93,11 +93,11 @@ class RiskProcessor:
     def process_raw_to_business(self):
         main_session = SessionLocal()
         try:
-            # 核心优化：为了快速同步今天(5月10日)的新闻，我们将窗口缩小到最近 12 小时
-            # 这样可以跳过 5月9日的积压，直接处理最及时的信息
+            # 扩展处理窗口到 7 天，确保能够处理积压数据并填充图表
             now = datetime.datetime.now()
-            min_date_dt = now - datetime.timedelta(hours=12)
+            min_date_dt = now - datetime.timedelta(days=7)
             min_date = min_date_dt.strftime('%Y%m%d%H%M%S')
+            logger.info(f"🔍 正在扫描 {min_date} 之后的新闻任务...")
             
             query = text(f"""
                 SELECT * FROM (

@@ -115,10 +115,9 @@ def wrap_in_iframe(chart_obj, height="500px", is_plotly=False):
     if is_plotly:
         full_html = chart_obj.to_html(include_plotlyjs='cdn', full_html=True)
     else:
-        # 强制使用可靠的 CDN 资源
+        # 强制使用可靠的 CDN 资源并生成完整网页结构
         chart_obj.js_host = "https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/"
-        full_html = chart_obj.render_embed()
-        # 补全完整的 HTML 结构，确保脚本能运行
+        chart_html = chart_obj.render_embed()
         full_html = f"""
         <!DOCTYPE html>
         <html>
@@ -126,17 +125,17 @@ def wrap_in_iframe(chart_obj, height="500px", is_plotly=False):
             <meta charset="utf-8">
             <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
             <script src="https://assets.pyecharts.org/assets/maps/world.js"></script>
+            <style>body {{ margin: 0; padding: 0; overflow: hidden; }}</style>
         </head>
-        <body style="margin:0;">
-            {full_html}
+        <body>
+            {chart_html}
         </body>
         </html>
         """
     
-    # 使用 srcdoc 替代 Base64，更稳定且无体积限制
-    import html
-    escaped_html = html.escape(full_html)
-    return f'<iframe srcdoc="{escaped_html}" width="100%" height="{height}" frameborder="0" style="border-radius:12px; border:none;"></iframe>'
+    # 采用 Base64 编码的 Data URI，兼容性最强
+    b64_html = base64.b64encode(full_html.encode('utf-8')).decode('utf-8')
+    return f'<iframe src="data:text/html;base64,{b64_html}" width="100%" height="{height}" frameborder="0" style="border-radius:12px; border:none;"></iframe>'
 
 def fetch_history_data_unified():
     """
@@ -513,6 +512,7 @@ with gr.Blocks(title="全球地缘风险分析平台") as demo:
 
     # 1. 按需更新逻辑 (Lazy Loading)
     def on_tab_select(evt: gr.SelectData, country, continent, kw):
+        logger.info(f"📑 切换到标签页: {evt.value}")
         # 仅当点击某个 Tab 时，才去加载那个 Tab 的重型图表
         if evt.value == "🗺️ 全球风险指数动态":
             return render_map(), gr.update(), gr.update(), gr.update()
