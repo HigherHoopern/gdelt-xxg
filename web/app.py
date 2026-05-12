@@ -392,9 +392,7 @@ def update_visualizations(country_name="全部", continent_name="全部"):
 def update_dashboard(country_name="全部", continent_name="全部", search_keyword=""):
     # 兼容旧函数
     news_html = update_news(country_name, continent_name, search_keyword)
-    map_h, line_h, pred_h = update_visualizations(country_name, continent_name)
-    return map_h, line_h, pred_h, news_html
-    
+    fig_map_html, line_html, predict_html = update_visualizations(country_name, continent_name)
     return fig_map_html, line_html, predict_html, news_html
 
 def generate_report(country_name):
@@ -406,36 +404,46 @@ def generate_report(country_name):
 
 # 加载外部 HTML/CSS 模板
 html_path = os.path.join(os.path.dirname(__file__), "index.html")
-with open(html_path, "r", encoding="utf-8") as f:
-    HTML_TEMPLATE = f.read()
+if os.path.exists(html_path):
+    with open(html_path, "r", encoding="utf-8") as f:
+        HTML_TEMPLATE = f.read()
+else:
+    HTML_TEMPLATE = ""
 
-# Gradio 界面 (使用自定义 HTML 结构)
+# Gradio 界面 (回归 Gradio 原生 Tabs 架构)
 with gr.Blocks(title="全球地缘风险分析平台") as demo:
-    # 定义组件但给它们分配唯一的 elem_id，这些 ID 对应 index.html 中的锚点
-    continent_selector = gr.Dropdown(
-        choices=["全部"] + list(CONTINENT_MAPPING.values()), 
-        value="全部", label=None, elem_id="continent-selector-raw"
-    )
-    country_selector = gr.Dropdown(
-        choices=get_dynamic_country_choices(), 
-        value="全部", label=None, elem_id="country-selector-raw"
-    )
+    with gr.Row(variant="compact"):
+        with gr.Column(scale=4): 
+            gr.Markdown("# 🌍 全球地缘政治风险分析平台")
+        with gr.Column(scale=1): 
+            continent_selector = gr.Dropdown(choices=["全部"] + list(CONTINENT_MAPPING.values()), value="全部", label="🗺️ 按洲筛选", container=True)
+        with gr.Column(scale=1): 
+            country_selector = gr.Dropdown(choices=get_dynamic_country_choices(), value="全部", label="🌐 国家筛选", container=True)
 
-    # 监测面板内容
-    map_plot = gr.HTML(elem_id="map-plot-raw")
-    predict_plot = gr.HTML(elem_id="predict-plot-raw")
-    trend_box = gr.HTML(elem_id="trend-box-raw")
+    with gr.Tabs():
+        with gr.TabItem("🗺️ 全球风险指数动态"):
+            map_plot = gr.HTML(label="风险动态演变")
+            
+        with gr.TabItem("📈 未来 5 日风险预测"):
+            predict_plot = gr.HTML(label="风险预测模型")
+            
+        with gr.TabItem("📉 历史风险波动趋势"):
+            trend_box = gr.HTML(label="30日波动趋势")
 
-    # 新闻面板内容
-    search_box = gr.Textbox(placeholder="🔍 搜索过去 3 天新闻...", show_label=False, elem_id="search-box-raw")
-    search_btn = gr.Button("搜索", variant="secondary", elem_id="search-btn-raw")
-    news_html_box = gr.HTML(elem_id="news-html-box-raw")
+        with gr.TabItem("📰 实时新闻"):
+            with gr.Row():
+                search_box = gr.Textbox(placeholder="🔍 输入关键词搜索过去 3 天的新闻...", label=None, show_label=False, container=False, scale=4)
+                search_btn = gr.Button("搜索", variant="secondary", scale=1)
+            news_html_box = gr.HTML()
 
-    # 隐藏的报告生成区域（根据需要可选移动）
-    with gr.Accordion("🤖 AI 研判报告生成器", open=False):
-        report_btn = gr.Button("🚀 立即生成研判报告", variant="primary")
-        report_box = gr.Markdown("请在顶部选择国家后点击生成按钮。", elem_id="ai-report-box")
+        with gr.TabItem("🤖 AI 研判报告"):
+            with gr.Column(elem_id="ai-report-container"):
+                gr.Markdown("### 🤖 区域投资风险 AI 深度研判")
+                report_btn = gr.Button("🚀 立即生成研判报告", variant="primary")
+                with gr.Column(elem_id="ai-report-scroll-area"):
+                    report_box = gr.Markdown("请在顶部选择国家后点击生成按钮。", elem_id="ai-report-box")
 
+    # 定义 outputs 列表，供下方所有更新函数使用
     outputs = [map_plot, trend_box, predict_plot, news_html_box]
 
     # 1. 定义快速更新 (仅新闻)
@@ -453,15 +461,15 @@ with gr.Blocks(title="全球地缘风险分析平台") as demo:
 
     continent_selector.change(on_geo_change, inputs=[continent_selector], outputs=[country_selector])
     
-    # 初始加载
+    # 统一仪表盘更新
     dashboard_inputs = [country_selector, continent_selector, search_box]
     demo.load(full_dashboard_update, inputs=dashboard_inputs, outputs=outputs)
     
-    # 交互更新：国家或洲改变时，刷新全量数据 (地图较慢)
+    # 交互更新：国家或洲改变时，刷新全量数据
     country_selector.change(full_dashboard_update, inputs=dashboard_inputs, outputs=outputs)
     continent_selector.change(full_dashboard_update, inputs=dashboard_inputs, outputs=outputs)
     
-    # 性能优化：搜索和定时器仅刷新“实时新闻”列表，不重新渲染地图和趋势图
+    # 性能优化：搜索和定时器仅刷新“实时新闻”列表
     news_only_output = [news_html_box]
     search_btn.click(fast_news_update, inputs=dashboard_inputs, outputs=news_only_output)
     search_box.submit(fast_news_update, inputs=dashboard_inputs, outputs=news_only_output)
