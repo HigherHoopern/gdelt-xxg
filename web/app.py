@@ -233,7 +233,7 @@ def render_map():
         timeline.add(m, date_str)
         
     timeline.add_schema(is_auto_play=False, play_interval=1000)
-    return wrap_in_iframe(timeline, height="500px")
+    return timeline.render_embed()
 
 def render_line(country_name="全部", continent_name="全部"):
     df = fetch_history_data_unified()
@@ -272,7 +272,7 @@ def render_line(country_name="全部", continent_name="全部"):
         yaxis_opts=opts.AxisOpts(name="分值"), 
         datazoom_opts=[opts.DataZoomOpts()]
     )
-    return wrap_in_iframe(line, height="572px")
+    return line.render_embed()
 
 def fetch_prediction_data_5d(country_code=None):
     session = SessionLocal()
@@ -330,7 +330,7 @@ def render_prediction_chart(country_name="全部", continent_name="全部"):
         legend_opts=opts.LegendOpts(pos_right="2%", pos_top="middle", orient="vertical"), 
         xaxis_opts=opts.AxisOpts(name="日期"), yaxis_opts=opts.AxisOpts(name="分值", min_=0, max_=100)
     )
-    return wrap_in_iframe(line, height="500px")
+    return line.render_embed()
 
 def update_news(country_name="全部", continent_name="全部", search_keyword=""):
     search_keyword = search_keyword or ""
