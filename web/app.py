@@ -409,37 +409,33 @@ html_path = os.path.join(os.path.dirname(__file__), "index.html")
 with open(html_path, "r", encoding="utf-8") as f:
     HTML_TEMPLATE = f.read()
 
-# Gradio 界面
-with gr.Blocks(title="全球地缘风险分析平台", head=HTML_TEMPLATE) as demo:
-    with gr.Row(variant="compact"):
-        with gr.Column(scale=4): 
-            gr.Markdown("# 🌍 全球地缘政治风险分析平台")
-        with gr.Column(scale=1): 
-            continent_selector = gr.Dropdown(choices=["全部"] + list(CONTINENT_MAPPING.values()), value="全部", label="🗺️ 按洲筛选", container=True)
-        with gr.Column(scale=1): 
-            country_selector = gr.Dropdown(choices=get_dynamic_country_choices(), value="全部", label="🌐 国家筛选", container=True)
+# Gradio 界面 (使用自定义 HTML 结构)
+with gr.Blocks(title="全球地缘风险分析平台") as demo:
+    # 定义组件但给它们分配唯一的 elem_id，这些 ID 对应 index.html 中的锚点
+    continent_selector = gr.Dropdown(
+        choices=["全部"] + list(CONTINENT_MAPPING.values()), 
+        value="全部", label=None, elem_id="continent-selector-raw"
+    )
+    country_selector = gr.Dropdown(
+        choices=get_dynamic_country_choices(), 
+        value="全部", label=None, elem_id="country-selector-raw"
+    )
 
-    with gr.Tabs():
-        with gr.TabItem("📊 风险监测面板"):
-            with gr.Row():
-                with gr.Column(scale=1): map_plot = gr.HTML(label="风险动态演变")
-                with gr.Column(scale=1): predict_plot = gr.HTML(label="未来 5 日风险预测")
-            with gr.Row(): trend_box = gr.HTML(label="风险趋势分析")
+    # 监测面板内容
+    map_plot = gr.HTML(elem_id="map-plot-raw")
+    predict_plot = gr.HTML(elem_id="predict-plot-raw")
+    trend_box = gr.HTML(elem_id="trend-box-raw")
 
-        with gr.TabItem("📰 实时新闻"):
-            with gr.Row():
-                search_box = gr.Textbox(placeholder="🔍 输入关键词搜索过去 3 天的新闻...", label=None, show_label=False, container=False, scale=4)
-                search_btn = gr.Button("搜索", variant="secondary", scale=1)
-            news_html_box = gr.HTML()
+    # 新闻面板内容
+    search_box = gr.Textbox(placeholder="🔍 搜索过去 3 天新闻...", show_label=False, elem_id="search-box-raw")
+    search_btn = gr.Button("搜索", variant="secondary", elem_id="search-btn-raw")
+    news_html_box = gr.HTML(elem_id="news-html-box-raw")
 
-        with gr.TabItem("🤖 AI 研判报告"):
-            with gr.Column(elem_id="ai-report-container"):
-                gr.Markdown("### 🤖 区域投资风险 AI 深度研判")
-                report_btn = gr.Button("🚀 立即生成研判报告", variant="primary")
-                with gr.Column(elem_id="ai-report-scroll-area"):
-                    report_box = gr.Markdown("请在顶部选择国家后点击生成按钮。", elem_id="ai-report-box")
+    # 隐藏的报告生成区域（根据需要可选移动）
+    with gr.Accordion("🤖 AI 研判报告生成器", open=False):
+        report_btn = gr.Button("🚀 立即生成研判报告", variant="primary")
+        report_box = gr.Markdown("请在顶部选择国家后点击生成按钮。", elem_id="ai-report-box")
 
-    # 核心修复：定义 outputs 列表，供下方所有更新函数使用
     outputs = [map_plot, trend_box, predict_plot, news_html_box]
 
     # 1. 定义快速更新 (仅新闻)
@@ -475,4 +471,4 @@ with gr.Blocks(title="全球地缘风险分析平台", head=HTML_TEMPLATE) as de
 
 if __name__ == "__main__":
     custom_theme = gr.themes.Default(primary_hue=gr.themes.Color(c50="#e6f0ff", c100="#cce0ff", c200="#99c2ff", c300="#66a3ff", c400="#3385ff", c500="#1467DF", c600="#1158c4", c700="#0d469b", c800="#0a3673", c900="#07264a", c950="#04152b"))
-    demo.launch(server_name="0.0.0.0", server_port=8090, theme=custom_theme)
+    demo.launch(server_name="0.0.0.0", server_port=8090, theme=custom_theme, head=HTML_TEMPLATE)

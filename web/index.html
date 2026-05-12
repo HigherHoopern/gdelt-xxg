@@ -2,71 +2,101 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>全球地缘风险分析平台</title>
     <style>
-        /* 全局样式 */
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-        .gradio-container { max-width: 98% !important; background-color: #f4f7f9 !important; }
-        footer { display: none !important; }
+        /* 全局美化 */
+        :root { --primary: #1467DF; --bg: #f4f7f9; }
+        body { margin: 0; padding: 0; background-color: var(--bg); font-family: 'PingFang SC', sans-serif; }
         
-        /* 按钮与交互 */
-        button.primary, .gr-button-primary { 
-            background-color: #1467DF !important; 
-            border-color: #1467DF !important; 
-            color: white !important; 
+        /* 顶部导航栏 */
+        .navbar { 
+            background: #fff; height: 60px; display: flex; align-items: center; 
+            padding: 0 30px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); 
+            position: sticky; top: 0; z-index: 1000;
         }
-        .tabs .tabitem.selected { border-color: #1467DF !important; }
+        .navbar-brand { font-size: 20px; font-weight: bold; color: var(--primary); display: flex; align-items: center; gap: 10px; }
         
-        /* AI 报告区域 */
-        #ai-report-container { 
-            height: 1000px !important; 
-            border: 1px solid #e0e0e0; 
-            padding: 15px; 
-            border-radius: 10px; 
-            background: #ffffff; 
-            box-shadow: 0 2px 12px rgba(0,0,0,0.08); 
-            display: flex !important; 
-            flex-direction: column !important; 
-        }
-        #ai-report-scroll-area { 
-            flex-grow: 1 !important; 
-            height: 850px !important; 
-            overflow-y: auto !important; 
-            border-top: 1px solid #eee; 
-            margin-top: 10px; 
-            padding-top: 10px; 
-        }
-        #ai-report-box { 
-            min-height: 100%; 
-            font-family: sans-serif; 
-            line-height: 1.5; 
-            color: #2c3e50; 
-        }
-        #ai-report-box h3 { 
-            margin-top: 0; 
-            margin-bottom: 10px; 
-            color: #1467DF; 
-            border-bottom: 2px solid #1467DF; 
-            padding-bottom: 5px; 
-        }
-        #ai-report-box p, #ai-report-box ul { margin-bottom: 8px !important; }
-        #ai-report-box strong { color: #1a1a1a; }
+        /* 仪表盘主容器 */
+        .dashboard-container { padding: 20px; max-width: 1600px; margin: 0 auto; }
         
-        /* 实时新闻表格包装器 */
-        #news-table-wrapper { 
-            height: 1100px !important; 
-            max-height: 1100px !important; 
-            min-height: 1100px !important; 
-            display: block !important; 
-        }
+        /* 栅格布局 */
+        .grid-row { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
+        .card { background: #fff; border-radius: 12px; padding: 15px; box-shadow: 0 4px 16px rgba(0,0,0,0.06); }
+        .card-header { font-weight: bold; margin-bottom: 15px; border-left: 4px solid var(--primary); padding-left: 10px; }
+
+        /* 隐藏 Gradio 原始头部 */
+        .gradio-container footer, .gr-pro { display: none !important; }
         
-        /* 优化表格滚动条 */
-        ::-webkit-scrollbar { width: 8px; }
-        ::-webkit-scrollbar-track { background: #f1f1f1; }
-        ::-webkit-scrollbar-thumb { background: #ccc; border-radius: 4px; }
-        ::-webkit-scrollbar-thumb:hover { background: #aaa; }
+        /* 定制实时新闻表格 */
+        #news-list-container { min-height: 800px; }
+
+        /* 搬运脚本：当 Gradio 组件出现后，将它们移动到对应的 HTML 容器中 */
+        <script>
+            function moveComponents() {
+                const mappings = {
+                    '#continent-selector-raw': '#continent-anchor',
+                    '#country-selector-raw': '#country-anchor',
+                    '#map-plot-raw': '#map-anchor',
+                    '#predict-plot-raw': '#predict-anchor',
+                    '#trend-box-raw': '#trend-anchor',
+                    '#news-html-box-raw': '#news-anchor',
+                    '#search-box-raw': '#search-anchor',
+                    '#search-btn-raw': '#search-btn-anchor'
+                };
+                
+                for (let source in mappings) {
+                    let srcEl = document.querySelector(source);
+                    let destEl = document.querySelector(mappings[source]);
+                    if (srcEl && destEl && !destEl.contains(srcEl)) {
+                        destEl.appendChild(srcEl);
+                    }
+                }
+            }
+            // 每隔 500ms 检查一次，直到组件全部挂载
+            setInterval(moveComponents, 500);
+        </script>
     </style>
 </head>
 <body>
-    <!-- 此文件主要用于存放样式和头部，Gradio 依然控制主体结构 -->
+    <div class="navbar">
+        <div class="navbar-brand">🌍 全球地缘政治风险分析平台</div>
+        <div style="flex-grow: 1;"></div>
+        <div id="continent-anchor" style="width: 150px; margin-right: 10px;"></div>
+        <div id="country-anchor" style="width: 150px;"></div>
+    </div>
+
+    <div class="dashboard-container">
+        <!-- 风险监测区 -->
+        <div class="grid-row">
+            <div class="card">
+                <div class="card-header">📊 全球风险动态演变</div>
+                <div id="map-anchor"></div>
+            </div>
+            <div class="card">
+                <div class="card-header">📈 未来 5 日风险预测</div>
+                <div id="predict-anchor"></div>
+            </div>
+        </div>
+
+        <div class="card" style="margin-bottom: 20px;">
+            <div class="card-header">📉 30 天历史风险波动趋势</div>
+            <div id="trend-anchor"></div>
+        </div>
+
+        <!-- 实时新闻区 -->
+        <div class="card">
+            <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+                <span>📰 实时新闻 (全球)</span>
+                <div style="display: flex; gap: 10px; width: 400px;">
+                    <div id="search-anchor" style="flex-grow: 1;"></div>
+                    <div id="search-btn-anchor"></div>
+                </div>
+            </div>
+            <div id="news-anchor"></div>
+        </div>
+    </div>
+
+    <!-- Gradio 的原始组件会被渲染在 body 的最下方，然后被上面的脚本搬走 -->
 </body>
 </html>
