@@ -12,7 +12,7 @@ from common.logger import setup_logger
 
 # ECharts 相关导入
 from pyecharts import options as opts
-from pyecharts.charts import Line
+from pyecharts.charts import Line, Map, Timeline
 from pyecharts.globals import CurrentConfig
 from pyecharts.commons.utils import JsCode
 
@@ -139,63 +139,101 @@ def fetch_history_data_unified():
     finally:
         session.close()
 
-# 全球 FIPS 10-4 到 ISO Alpha-3 映射表 (常用国家)
-FIPS_TO_ISO = {
-    'US': 'USA', 'CH': 'CHN', 'RU': 'RUS', 'IN': 'IND', 'ID': 'IDN', 'BR': 'BRA', 'PK': 'PAK', 'NG': 'NGA', 'BD': 'BGD', 'RU': 'RUS', 'MX': 'MEX', 'JP': 'JPN', 'ET': 'ETH', 'PH': 'PHL', 'RP': 'PHL', 'EG': 'EGY', 'VN': 'VNM', 'VM': 'VNM', 'CD': 'COD', 'TR': 'TUR', 'IR': 'IRN', 'DE': 'DEU', 'TH': 'THA', 'GB': 'GBR', 'FR': 'FRA', 'IT': 'ITA', 'ZA': 'ZAF', 'MM': 'MMR', 'BM': 'MMR', 'KR': 'KOR', 'CO': 'COL', 'ES': 'ESP', 'UA': 'UKR', 'AR': 'ARG', 'DZ': 'DZA', 'PL': 'POL', 'CA': 'CAN', 'SA': 'SAU', 'UZ': 'UZB', 'MY': 'MYS', 'IQ': 'IRQ', 'AF': 'AFG', 'AFG': 'AFG', 'CB': 'KHM', 'LA': 'LAO', 'SN': 'SGP', 'BX': 'BRN', 'TT': 'TLS', 'TT': 'TLS', 'CE': 'LKA', 'NP': 'NPL', 'BT': 'BTN', 'BG': 'BGD', 'PK': 'PAK', 'IN': 'IND'
+# PyEcharts 世界地图国家名称映射 (用于显示中文)
+WORLD_NAME_MAP = {
+    "Afghanistan": "阿富汗", "Angola": "安哥拉", "Albania": "阿尔巴尼亚", "United Arab Emirates": "阿联酋", "Argentina": "阿根廷",
+    "Armenia": "亚美尼亚", "Australia": "澳大利亚", "Austria": "奥地利", "Azerbaijan": "亚塞拜然", "Burundi": "布隆迪",
+    "Belgium": "比利时", "Benin": "贝宁", "Burkina Faso": "布基纳法索", "Bangladesh": "孟加拉国", "Bulgaria": "保加利亚",
+    "Bahamas": "巴哈马", "Bosnia and Herz.": "波斯尼亚和黑塞哥维那", "Belarus": "白俄罗斯", "Belize": "伯利兹", "Bermuda": "百慕大",
+    "Bolivia": "玻利维亚", "Brazil": "巴西", "Brunei": "文莱", "Bhutan": "不丹", "Botswana": "博茨瓦纳",
+    "Central African Rep.": "中非共和国", "Canada": "加拿大", "Switzerland": "瑞士", "Chile": "智利", "China": "中国",
+    "Ivory Coast": "科特迪瓦", "Cameroon": "喀麦隆", "Dem. Rep. Congo": "刚果民主共和国", "Congo": "刚果共和国", "Colombia": "哥伦比亚",
+    "Costa Rica": "哥斯达黎加", "Cuba": "古巴", "Northern Cyprus": "北塞浦路斯", "Cyprus": "塞浦路斯", "Czech Rep.": "捷克",
+    "Germany": "德国", "Djibouti": "吉布提", "Denmark": "丹麦", "Dominican Rep.": "多米尼加共和国", "Algeria": "阿尔及利亚",
+    "Ecuador": "厄瓜多尔", "Egypt": "埃及", "Eritrea": "厄立特里亚", "Spain": "西班牙", "Estonia": "爱沙尼亚",
+    "Ethiopia": "埃塞俄比亚", "Finland": "芬兰", "Fiji": "斐济", "France": "法国", "Gabon": "加蓬",
+    "United Kingdom": "英国", "Georgia": "格鲁吉亚", "Ghana": "加纳", "Guinea": "几内亚", "Gambia": "冈比亚",
+    "Guinea-Bissau": "几内亚比绍", "Eq. Guinea": "赤道几内亚", "Greece": "希腊", "Greenland": "格陵兰", "Guatemala": "危地马拉",
+    "Guyana": "圭亚那", "Honduras": "洪都拉斯", "Croatia": "开格鲁吉亚", "Haiti": "海地", "Hungary": "匈牙利",
+    "Indonesia": "印度尼西亚", "India": "印度", "Ireland": "爱尔兰", "Iran": "伊朗", "Iraq": "伊拉克",
+    "Iceland": "冰岛", "Israel": "以色列", "Italy": "意大利", "Jamaica": "牙买加", "Jordan": "约旦",
+    "Japan": "日本", "Kazakhstan": "哈萨克斯坦", "Kenya": "肯尼亚", "Kyrgyzstan": "吉尔吉斯斯坦", "Cambodia": "柬埔寨",
+    "South Korea": "韩国", "Kuwait": "科威特", "Laos": "老挝", "Lebanon": "黎巴嫩", "Liberia": "利比里亚",
+    "Libya": "利比亚", "Sri Lanka": "斯里兰卡", "Lesotho": "莱索托", "Lithuania": "立陶宛", "Luxembourg": "卢森堡",
+    "Latvia": "拉脱维亚", "Morocco": "摩洛哥", "Moldova": "摩尔多瓦", "Madagascar": "马达加斯加", "Mexico": "墨西哥",
+    "Macedonia": "马其顿", "Mali": "马里", "Myanmar": "缅甸", "Montenegro": "黑山", "Mongolia": "蒙古",
+    "Mozambique": "莫桑比克", "Mauritania": "毛里塔尼亚", "Malawi": "马拉维", "Malaysia": "马来西亚", "Namibia": "纳米比亚",
+    "New Caledonia": "新喀里多尼亚", "Niger": "尼日尔", "Nigeria": "尼日利亚", "Nicaragua": "尼加拉瓜", "Netherlands": "荷兰",
+    "Norway": "挪威", "Nepal": "尼泊尔", "New Zealand": "新西兰", "Oman": "阿曼", "Pakistan": "巴基斯坦",
+    "Panama": "巴拿马", "Peru": "秘鲁", "Philippines": "菲律宾", "Papua New Guinea": "巴布亚新几内亚", "Poland": "波兰",
+    "Puerto Rico": "波多黎各", "North Korea": "朝鲜", "Portugal": "葡萄牙", "Paraguay": "巴拉圭", "Qatar": "卡塔尔",
+    "Romania": "罗马尼亚", "Russia": "俄罗斯", "Rwanda": "卢旺达", "W. Sahara": "西撒哈拉", "Saudi Arabia": "沙特阿拉伯",
+    "Sudan": "苏丹", "S. Sudan": "南苏丹", "Senegal": "塞内加尔", "Solomon Is.": "所罗门群岛", "Sierra Leone": "塞拉利昂",
+    "El Salvador": "萨尔瓦多", "Somaliland": "索马里兰", "Somalia": "索马里", "Serbia": "塞尔维亚", "Suriname": "苏里南",
+    "Slovakia": "斯洛伐克", "Slovenia": "斯洛文尼亚", "Sweden": "瑞典", "Swaziland": "斯威士兰", "Syria": "叙利亚",
+    "Chad": "乍得", "Togo": "多哥", "Thailand": "泰国", "Tajikistan": "塔吉克斯坦", "Turkmenistan": "土库曼斯坦",
+    "East Timor": "东帝汶", "Trinidad and Tobago": "特立尼达和多巴哥", "Tunisia": "突尼斯", "Turkey": "土耳其", "Tanzania": "坦桑尼亚",
+    "Uganda": "乌干达", "Ukraine": "乌克兰", "Uruguay": "乌拉圭", "United States": "美国", "Uzbekistan": "乌兹别克斯坦",
+    "Venezuela": "委内瑞拉", "Vietnam": "越南", "Vanuatu": "瓦努阿图", "Palestine": "巴勒斯坦", "Yemen": "也门",
+    "South Africa": "南非", "Zambia": "赞比亚", "Zimbabwe": "津巴布韦"
 }
 
-def render_plotly_map():
+# 内部 FIPS 到 PyEcharts 英文名映射
+FIPS_TO_ECHART_NAME = {
+    'BX': 'Brunei', 'CB': 'Cambodia', 'ID': 'Indonesia', 'LA': 'Laos', 'MY': 'Malaysia', 'BM': 'Myanmar', 
+    'RP': 'Philippines', 'SN': 'Singapore', 'TH': 'Thailand', 'VM': 'Vietnam', 'TT': 'East Timor',
+    'IN': 'India', 'PK': 'Pakistan', 'BG': 'Bangladesh', 'CE': 'Sri Lanka', 'NP': 'Nepal', 'BT': 'Bhutan',
+    'IR': 'Iran', 'IZ': 'Iraq', 'SA': 'Saudi Arabia', 'IS': 'Israel', 'TU': 'Turkey', 'EG': 'Egypt', 
+    'AE': 'United Arab Emirates', 'QA': 'Qatar', 'SY': 'Syria', 'JO': 'Jordan', 'LE': 'Lebanon',
+    'US': 'United States', 'CH': 'China', 'RU': 'Russia', 'GB': 'United Kingdom', 'FR': 'France', 
+    'DE': 'Germany', 'JP': 'Japan', 'KR': 'South Korea', 'BR': 'Brazil', 'AU': 'Australia'
+}
+
+def render_map():
     raw_df = fetch_history_data_unified()
     
-    # 核心修复：手动构造最近 31 天的完整日期轴
     today_dt = datetime.datetime.now()
     all_dates = [(today_dt - datetime.timedelta(days=i)).strftime('%Y-%m-%d') for i in range(31)]
     all_dates = sorted(list(set(all_dates)))
     
     if raw_df.empty: return "<div style='height:500px; display:flex; align-items:center; justify-content:center;'>暂无风险数据</div>"
     
-    # 性能优化：仅保留在数据库中确实有数值的国家，减少地图数据包体积
-    active_countries = list(raw_df[raw_df['risk_index'] > 0]['country_code'].unique())
-    if not active_countries: active_countries = ['US'] # 兜底
-
-    index_df = pd.MultiIndex.from_product([all_dates, active_countries], names=['date_str', 'country_code']).to_frame(index=False)
-    df = pd.merge(index_df, raw_df[['date_str', 'country_code', 'risk_index']], on=['date_str', 'country_code'], how='left')
-    df['risk_index'] = df['risk_index'].fillna(0)
+    timeline = Timeline(init_opts=opts.InitOpts(width="100%", height="500px"))
     
-    # 映射国家名称和 ISO 代码
-    df['国家'] = df['country_code'].apply(lambda x: COUNTRY_GEO_DATA.get(x, {}).get('name', x))
-    df['iso_alpha'] = df['country_code'].apply(lambda x: FIPS_TO_ISO.get(x, x)) # 优先从映射表找，找不到用原码
-    df['风险等级'] = df['risk_index'].apply(lambda x: "低风险" if x <= 20 else "较低风险" if x <= 40 else "中等风险" if x <= 60 else "高风险" if x <= 80 else "极高风险")
-    
-    df = df.sort_values('date_str')
-    
-    fig = px.choropleth(
-        df, locations="iso_alpha", color="risk_index", hover_name="国家", animation_frame="date_str", 
-        hover_data={"iso_alpha": False, "risk_index": ":.2f", "date_str": True, "风险等级": True},
-        color_continuous_scale=[(0, "#2ECC71"), (0.5, "#F1C40F"), (1.0, "#E74C3C")], 
-        range_color=[0, 100], scope="world", # 修改为世界范围
-        labels={'risk_index': '风险指数', 'date_str': '日期'}
-    )
-    
-    # 采用自然地球投影，视觉效果更好
-    fig.update_geos(
-        visible=True, 
-        projection_type="natural earth",
-        showcountries=True, 
-        countrycolor="#d1d1d1"
-    )
-    
-    fig.update_layout(
-        title={'text': "全球风险指数动态", 'x': 0.95, 'y': 0.98, 'xanchor': 'right', 'font': {'size': 18}},
-        margin={"r":20,"t":80,"l":10,"b":0}, height=500,
-        dragmode=False # 禁用拖动提升性能
-    )
-    
-    for frame in fig.frames:
-        frame.layout.coloraxis.cmin = 0
-        frame.layout.coloraxis.cmax = 100
+    for date_str in all_dates:
+        # 获取当前日期的数据
+        day_df = raw_df[raw_df['date_str'] == date_str]
         
-    return wrap_in_iframe(fig, height="500px", is_plotly=True)
+        # 构建 PyEcharts 数据对 [(英文名, 数值), ...]
+        map_data = []
+        for _, row in day_df.iterrows():
+            echart_name = FIPS_TO_ECHART_NAME.get(row['country_code'])
+            if echart_name:
+                map_data.append((echart_name, round(float(row['risk_index']), 2)))
+        
+        m = (
+            Map()
+            .add(
+                "风险指数",
+                map_data,
+                maptype="world",
+                is_map_symbol_show=False,
+                name_map=WORLD_NAME_MAP,
+                label_opts=opts.LabelOpts(is_show=False),
+            )
+            .set_global_opts(
+                title_opts=opts.TitleOpts(title=f"全球风险动态演变 ({date_str})"),
+                visualmap_opts=opts.VisualMapOpts(
+                    min_=0, max_=100,
+                    range_color=["#2ECC71", "#F1C40F", "#E74C3C"],
+                    is_piecewise=False
+                ),
+            )
+        )
+        timeline.add(m, date_str)
+        
+    timeline.add_schema(is_auto_play=False, play_interval=1000)
+    return wrap_in_iframe(timeline, height="500px")
 
 def render_line(country_name="全部", continent_name="全部"):
     df = fetch_history_data_unified()
@@ -387,7 +425,7 @@ def update_news(country_name="全部", continent_name="全部", search_keyword="
 
 def update_visualizations(country_name="全部", continent_name="全部"):
     logger.info(f"📊 更新图表可视化: {country_name}, {continent_name}")
-    fig_map_html = render_plotly_map()
+    fig_map_html = render_map()
     line_html = render_line(country_name, continent_name)
     predict_html = render_prediction_chart(country_name, continent_name)
     return fig_map_html, line_html, predict_html
@@ -450,7 +488,7 @@ with gr.Blocks(title="全球地缘风险分析平台") as demo:
     def on_tab_select(evt: gr.SelectData, country, continent, kw):
         # 仅当点击某个 Tab 时，才去加载那个 Tab 的重型图表
         if evt.value == "🗺️ 全球风险指数动态":
-            return render_plotly_map(), gr.update(), gr.update(), gr.update()
+            return render_map(), gr.update(), gr.update(), gr.update()
         elif evt.value == "📈 未来 5 日风险预测":
             return gr.update(), gr.update(), render_prediction_chart(country, continent), gr.update()
         elif evt.value == "📉 历史风险波动趋势":
