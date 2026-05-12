@@ -1,6 +1,7 @@
 import gradio as gr
 import pandas as pd
 import plotly.express as px
+import os
 from sqlalchemy import text
 from common.models import SessionLocal, DailyRiskIndex, RiskAnalysisData, RiskPrediction, RiskReport, RiskIndexHistory
 from config.settings import REGIONAL_COUNTRIES
