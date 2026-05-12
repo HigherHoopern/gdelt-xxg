@@ -8,6 +8,8 @@ from config.settings import REGIONAL_COUNTRIES
 from service.reporter.main import RiskReporter
 import datetime
 import base64
+import tempfile
+import uuid
 from common.logger import setup_logger
 
 # ECharts 相关导入
@@ -113,7 +115,14 @@ def wrap_in_iframe(chart_obj, height="440px", is_plotly=False):
     if is_plotly:
         full_html = chart_obj.to_html(include_plotlyjs='cdn', full_html=True)
     else:
-        full_html = chart_obj.render_embed()
+        temp_file = os.path.join(tempfile.gettempdir(), f"echart_{uuid.uuid4().hex}.html")
+        chart_obj.render(temp_file)
+        with open(temp_file, "r", encoding="utf-8") as f:
+            full_html = f.read()
+        try:
+            os.remove(temp_file)
+        except:
+            pass
     b64_html = base64.b64encode(full_html.encode('utf-8')).decode('utf-8')
     return f'<iframe src="data:text/html;base64,{b64_html}" width="100%" height="{height}" frameborder="0" style="border-radius:10px;"></iframe>'
 
@@ -233,7 +242,7 @@ def render_map():
         timeline.add(m, date_str)
         
     timeline.add_schema(is_auto_play=False, play_interval=1000)
-    return timeline.render_embed()
+    return wrap_in_iframe(timeline, height="500px")
 
 def render_line(country_name="全部", continent_name="全部"):
     df = fetch_history_data_unified()
@@ -272,7 +281,7 @@ def render_line(country_name="全部", continent_name="全部"):
         yaxis_opts=opts.AxisOpts(name="分值"), 
         datazoom_opts=[opts.DataZoomOpts()]
     )
-    return line.render_embed()
+    return wrap_in_iframe(line, height="572px")
 
 def fetch_prediction_data_5d(country_code=None):
     session = SessionLocal()
@@ -330,7 +339,7 @@ def render_prediction_chart(country_name="全部", continent_name="全部"):
         legend_opts=opts.LegendOpts(pos_right="2%", pos_top="middle", orient="vertical"), 
         xaxis_opts=opts.AxisOpts(name="日期"), yaxis_opts=opts.AxisOpts(name="分值", min_=0, max_=100)
     )
-    return line.render_embed()
+    return wrap_in_iframe(line, height="500px")
 
 def update_news(country_name="全部", continent_name="全部", search_keyword=""):
     search_keyword = search_keyword or ""
