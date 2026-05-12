@@ -204,7 +204,7 @@ WORLD_NAME_MAP = {
     "South Africa": "南非", "Zambia": "赞比亚", "Zimbabwe": "津巴布韦"
 }
 
-# 内部 FIPS 到 PyEcharts 英文名映射
+# 内部 FIPS 到 PyEcharts 英文名映射 (进一步扩展以防空数据)
 FIPS_TO_ECHART_NAME = {
     'BX': 'Brunei', 'CB': 'Cambodia', 'ID': 'Indonesia', 'LA': 'Laos', 'MY': 'Malaysia', 'BM': 'Myanmar', 
     'RP': 'Philippines', 'SN': 'Singapore', 'TH': 'Thailand', 'VM': 'Vietnam', 'TT': 'East Timor',
@@ -212,7 +212,8 @@ FIPS_TO_ECHART_NAME = {
     'IR': 'Iran', 'IZ': 'Iraq', 'SA': 'Saudi Arabia', 'IS': 'Israel', 'TU': 'Turkey', 'EG': 'Egypt', 
     'AE': 'United Arab Emirates', 'QA': 'Qatar', 'SY': 'Syria', 'JO': 'Jordan', 'LE': 'Lebanon',
     'US': 'United States', 'CH': 'China', 'RU': 'Russia', 'GB': 'United Kingdom', 'FR': 'France', 
-    'DE': 'Germany', 'JP': 'Japan', 'KR': 'South Korea', 'BR': 'Brazil', 'AU': 'Australia'
+    'DE': 'Germany', 'JP': 'Japan', 'KR': 'South Korea', 'BR': 'Brazil', 'AU': 'Australia',
+    'CA': 'Canada', 'MX': 'Mexico', 'ZA': 'South Africa', 'EG': 'Egypt', 'NG': 'Nigeria'
 }
 
 def render_map():
@@ -230,16 +231,16 @@ def render_map():
         # 获取当前日期的数据
         day_df = raw_df[raw_df['date_str'] == date_str]
         
-        # 构建 PyEcharts 数据对 [(英文名, 数值), ...]
         map_data = []
         for _, row in day_df.iterrows():
             echart_name = FIPS_TO_ECHART_NAME.get(row['country_code'])
             if echart_name:
                 map_data.append((echart_name, round(float(row['risk_index']), 2)))
         
-        m = (
-            Map()
-            .add(
+        m = Map()
+        # 核心修复：防止 IndexError。如果当天没有数据，则不执行 .add()
+        if map_data:
+            m.add(
                 "风险指数",
                 map_data,
                 maptype="world",
@@ -247,14 +248,14 @@ def render_map():
                 name_map=WORLD_NAME_MAP,
                 label_opts=opts.LabelOpts(is_show=False),
             )
-            .set_global_opts(
-                title_opts=opts.TitleOpts(title=f"全球风险动态演变 ({date_str})"),
-                visualmap_opts=opts.VisualMapOpts(
-                    min_=0, max_=100,
-                    range_color=["#2ECC71", "#F1C40F", "#E74C3C"],
-                    is_piecewise=False
-                ),
-            )
+        
+        m.set_global_opts(
+            title_opts=opts.TitleOpts(title=f"全球风险动态演变 ({date_str})"),
+            visualmap_opts=opts.VisualMapOpts(
+                min_=0, max_=100,
+                range_color=["#2ECC71", "#F1C40F", "#E74C3C"],
+                is_piecewise=False
+            ),
         )
         timeline.add(m, date_str)
         
