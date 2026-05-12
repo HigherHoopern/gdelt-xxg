@@ -433,6 +433,9 @@ with gr.Blocks(title="南亚东南亚地缘风险分析平台") as demo:
                 with gr.Column(elem_id="ai-report-scroll-area"):
                     report_box = gr.Markdown("请在顶部选择国家后点击生成按钮。", elem_id="ai-report-box")
 
+    # 核心修复：定义 outputs 列表，供下方所有更新函数使用
+    outputs = [map_plot, trend_box, predict_plot, news_html_box]
+
     # 1. 定义快速更新 (仅新闻)
     def fast_news_update(country, continent, keyword):
         return update_news(country, continent, keyword)
