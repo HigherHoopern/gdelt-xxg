@@ -290,24 +290,16 @@ def render_prediction_chart(country_name="全部", continent_name="全部"):
     )
     return wrap_in_iframe(line, height="500px")
 
-def update_dashboard(country_name="全部", continent_name="全部", search_keyword=""):
+def update_news(country_name="全部", continent_name="全部", search_keyword=""):
     search_keyword = search_keyword or ""
-    logger.info(f"🔄 更新仪表盘: {country_name}, {continent_name}, 搜索: {search_keyword}")
+    logger.info(f"📰 更新实时新闻: {country_name}, {continent_name}, 搜索: {search_keyword}")
     
-    # 映射国家代码
     code = next((k for k, v in COUNTRY_GEO_DATA.items() if v['name'] == country_name), None) if country_name != "全部" else None
-    
-    fig_map_html = render_plotly_map()
-    line_html = render_line(country_name, continent_name)
-    predict_html = render_prediction_chart(country_name, continent_name)
-    
     session = SessionLocal()
-    # 核心优化：为了防止页面崩溃，我们将窗口缩小到 24 小时，并减少单页显示
-    since_time = datetime.datetime.now() - datetime.timedelta(hours=24)
+    # 核心需求：过去 3 天的新闻 (根据用户最新要求恢复 3 天窗口)
+    since_time = datetime.datetime.now() - datetime.timedelta(days=3)
     
     valid_filter = "(title_zh IS NOT NULL OR title IS NOT NULL) AND (summary_zh IS NOT NULL AND summary_zh != '') AND (title_zh NOT LIKE '%无法解析原文%')"
-    
-    # 构建搜索子句
     search_clause = ""
     params = {"since": since_time}
     
@@ -315,7 +307,6 @@ def update_dashboard(country_name="全部", continent_name="全部", search_keyw
         search_clause = f"AND (title_zh ILIKE :kw OR summary_zh ILIKE :kw OR title ILIKE :kw)"
         params["kw"] = f"%{search_keyword}%"
         
-    # 构建洲/国家过滤
     geo_clause = ""
     if code:
         geo_clause = "AND country_code = :code"
@@ -327,13 +318,13 @@ def update_dashboard(country_name="全部", continent_name="全部", search_keyw
             geo_clause = f"AND country_code IN :continent_countries"
             params["continent_countries"] = tuple(continent_countries)
         else:
-            geo_clause = "AND 1=0" # 无效过滤
+            geo_clause = "AND 1=0"
 
     query_news = text(f"""
         SELECT event_date, country_code, category, title, title_zh, summary_zh, url, image_url 
         FROM risk_analysis_data 
         WHERE event_date >= :since AND {valid_filter} {geo_clause} {search_clause}
-        ORDER BY event_date DESC LIMIT 20
+        ORDER BY event_date DESC LIMIT 30
     """)
     
     news_df = pd.read_sql(query_news, session.bind, params=params)
@@ -342,20 +333,20 @@ def update_dashboard(country_name="全部", continent_name="全部", search_keyw
     update_time = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     news_html = f"""
     <div style="margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;">
-        <span style="color: #666; font-size: 14px;">📅 数据同步时间: {update_time} (仅显示过去24小时新闻)</span>
+        <span style="color: #666; font-size: 14px;">📅 数据同步时间: {update_time} (仅显示过去3天新闻)</span>
         <span style="background: {PRIMARY_COLOR}; color: white; padding: 2px 8px; border-radius: 12px; font-size: 12px;">全球实时同步</span>
     </div>
     <div style="height:1080px; overflow-y:auto; border-radius:12px; box-shadow:0 4px 16px rgba(0,0,0,0.1); background:white;">
         <table style="width:100%; border-collapse:collapse; table-layout:fixed; font-family:sans-serif;">
             <thead>
                 <tr style="background:{PRIMARY_COLOR}; color:white !important; text-align:left;">
-                    <th style="width:100px; padding:15px; color:white !important;">时间</th>
-                    <th style="width:45px; padding:15px; color:white !important;">国家</th>
-                    <th style="width:50px; padding:15px; color:white !important;">类别</th>
-                    <th style="width:13%; padding:15px; color:white !important;">标题</th>
-                    <th style="width:35%; padding:15px; color:white !important;">内容摘要</th>
-                    <th style="width:130px; padding:15px; text-align:center; color:white !important;">图片预览</th>
-                    <th style="width:65px; padding:15px; text-align:center; color:white !important;">详情</th>
+                    <th style="width:90px; padding:15px; color:white !important;">时间</th>
+                    <th style="width:40px; padding:15px; color:white !important;">国家</th>
+                    <th style="width:45px; padding:15px; color:white !important;">类别</th>
+                    <th style="width:12%; padding:15px; color:white !important;">标题</th>
+                    <th style="width:30%; padding:15px; color:white !important;">内容摘要</th>
+                    <th style="width:250px; padding:15px; text-align:center; color:white !important;">图片预览</th>
+                    <th style="width:60px; padding:15px; text-align:center; color:white !important;">详情</th>
                 </tr>
             </thead>
             <tbody>
@@ -369,27 +360,39 @@ def update_dashboard(country_name="全部", continent_name="全部", search_keyw
         if title_str.lower() == 'nan': continue
         summary_str = str(row['summary_zh'])[:300] + "..."
         
-        # 尺寸加倍：120x90
+        # 尺寸再加倍：240x180
         img_url = row.get('image_url')
         if pd.notna(img_url) and img_url != '':
-            img_html = f'<img src="{img_url}" style="width:120px; height:90px; object-fit:cover; border-radius:6px;" onerror="this.style.display=\'none\'">'
+            img_html = f'<img src="{img_url}" style="width:240px; height:180px; object-fit:cover; border-radius:8px;" onerror="this.parentElement.innerHTML=\'<div style=width:240px;height:180px;background:#f0f0f0;display:flex;align-items:center;justify-content:center;color:#999;font-size:12px;>图片失效</div>\'">'
         else:
-            img_html = '<div style="width:120px; height:90px; background:#f0f0f0; border-radius:6px; display:flex; align-items:center; justify-content:center; color:#999; font-size:12px;">暂无图片</div>'
+            img_html = '<div style="width:240px; height:180px; background:#f0f0f0; border-radius:8px; display:flex; align-items:center; justify-content:center; color:#999; font-size:12px;">暂无图片</div>'
 
-        link_html = f'<a href="{row["url"]}" target="_blank" style="background:{PRIMARY_COLOR}; color:white; padding:6px 12px; border-radius:4px; text-decoration:none; font-size:12px; font-weight:bold;">阅读</a>'
+        link_html = f'<a href="{row["url"]}" target="_blank" style="background:{PRIMARY_COLOR}; color:white; padding:8px 16px; border-radius:4px; text-decoration:none; font-size:13px; font-weight:bold;">阅读原文</a>'
         news_html += f"""
         <tr style="background:{bg}; border-bottom:1px solid #f0f3f5;">
-            <td style="padding:16px 12px; color:#666; font-size:13px;">{time_str}</td>
-            <td style="padding:16px 12px; font-size:13px;">{country_cn}</td>
-            <td style="padding:16px 12px; font-size:13px;">{cat_cn}</td>
-            <td style="padding:16px 12px; font-weight:600; font-size:14px; overflow:hidden;">{title_str}</td>
-            <td style="padding:16px 12px; font-size:14px; color:#444;">{summary_str}</td>
-            <td style="padding:10px 12px; text-align:center;">{img_html}</td>
+            <td style="padding:16px 12px; color:#666; font-size:12px;">{time_str}</td>
+            <td style="padding:16px 12px; font-size:12px;">{country_cn}</td>
+            <td style="padding:16px 12px; font-size:12px;">{cat_cn}</td>
+            <td style="padding:16px 12px; font-weight:600; font-size:13px; line-height:1.4;">{title_str}</td>
+            <td style="padding:16px 12px; font-size:13px; color:#444; line-height:1.5;">{summary_str}</td>
+            <td style="padding:12px; text-align:center;">{img_html}</td>
             <td style="padding:16px 12px; text-align:center;">{link_html}</td>
         </tr>"""
     news_html += "</tbody></table></div>"
-    
-    return fig_map_html, line_html, predict_html, news_html
+    return news_html
+
+def update_visualizations(country_name="全部", continent_name="全部"):
+    logger.info(f"📊 更新图表可视化: {country_name}, {continent_name}")
+    fig_map_html = render_plotly_map()
+    line_html = render_line(country_name, continent_name)
+    predict_html = render_prediction_chart(country_name, continent_name)
+    return fig_map_html, line_html, predict_html
+
+def update_dashboard(country_name="全部", continent_name="全部", search_keyword=""):
+    # 兼容旧函数
+    news_html = update_news(country_name, continent_name, search_keyword)
+    map_h, line_h, pred_h = update_visualizations(country_name, continent_name)
+    return map_h, line_h, pred_h, news_html
     
     return fig_map_html, line_html, predict_html, news_html
 
@@ -430,26 +433,35 @@ with gr.Blocks(title="南亚东南亚地缘风险分析平台") as demo:
                 with gr.Column(elem_id="ai-report-scroll-area"):
                     report_box = gr.Markdown("请在顶部选择国家后点击生成按钮。", elem_id="ai-report-box")
 
-    outputs = [map_plot, trend_box, predict_plot, news_html_box]
-    
-    # 定义更新逻辑
+    # 1. 定义快速更新 (仅新闻)
+    def fast_news_update(country, continent, keyword):
+        return update_news(country, continent, keyword)
+
+    # 2. 定义全量更新 (仪表盘 + 新闻)
+    def full_dashboard_update(country, continent, keyword):
+        return update_dashboard(country, continent, keyword)
+
+    # 洲级联动
     def on_geo_change(continent):
-        # 当洲改变时，动态更新国家列表
         new_choices = get_dynamic_country_choices(continent)
         return gr.update(choices=new_choices, value="全部")
 
     continent_selector.change(on_geo_change, inputs=[continent_selector], outputs=[country_selector])
     
-    # 统一仪表盘更新
+    # 初始加载
     dashboard_inputs = [country_selector, continent_selector, search_box]
-    demo.load(update_dashboard, inputs=dashboard_inputs, outputs=outputs)
+    demo.load(full_dashboard_update, inputs=dashboard_inputs, outputs=outputs)
     
-    country_selector.change(update_dashboard, inputs=dashboard_inputs, outputs=outputs)
-    continent_selector.change(update_dashboard, inputs=dashboard_inputs, outputs=outputs)
-    search_btn.click(update_dashboard, inputs=dashboard_inputs, outputs=outputs)
-    search_box.submit(update_dashboard, inputs=dashboard_inputs, outputs=outputs)
+    # 交互更新：国家或洲改变时，刷新全量数据 (地图较慢)
+    country_selector.change(full_dashboard_update, inputs=dashboard_inputs, outputs=outputs)
+    continent_selector.change(full_dashboard_update, inputs=dashboard_inputs, outputs=outputs)
+    
+    # 性能优化：搜索和定时器仅刷新“实时新闻”列表，不重新渲染地图和趋势图
+    news_only_output = [news_html_box]
+    search_btn.click(fast_news_update, inputs=dashboard_inputs, outputs=news_only_output)
+    search_box.submit(fast_news_update, inputs=dashboard_inputs, outputs=news_only_output)
+    gr.Timer(60).tick(fast_news_update, inputs=dashboard_inputs, outputs=news_only_output)
 
-    gr.Timer(60).tick(update_dashboard, inputs=dashboard_inputs, outputs=outputs)
     report_btn.click(generate_report, inputs=[country_selector], outputs=[report_box])
 
 if __name__ == "__main__":
