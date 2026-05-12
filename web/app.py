@@ -111,20 +111,32 @@ CATEGORY_TRANSLATION = {
     'Health': '卫生防疫', 'Environment': '生态环境', 'Tech': '科技竞争'
 }
 
-def wrap_in_iframe(chart_obj, height="440px", is_plotly=False):
+def wrap_in_iframe(chart_obj, height="500px", is_plotly=False):
     if is_plotly:
         full_html = chart_obj.to_html(include_plotlyjs='cdn', full_html=True)
     else:
-        temp_file = os.path.join(tempfile.gettempdir(), f"echart_{uuid.uuid4().hex}.html")
-        chart_obj.render(temp_file)
-        with open(temp_file, "r", encoding="utf-8") as f:
-            full_html = f.read()
-        try:
-            os.remove(temp_file)
-        except:
-            pass
-    b64_html = base64.b64encode(full_html.encode('utf-8')).decode('utf-8')
-    return f'<iframe src="data:text/html;base64,{b64_html}" width="100%" height="{height}" frameborder="0" style="border-radius:10px;"></iframe>'
+        # 强制使用可靠的 CDN 资源
+        chart_obj.js_host = "https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/"
+        full_html = chart_obj.render_embed()
+        # 补全完整的 HTML 结构，确保脚本能运行
+        full_html = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="utf-8">
+            <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+            <script src="https://assets.pyecharts.org/assets/maps/world.js"></script>
+        </head>
+        <body style="margin:0;">
+            {full_html}
+        </body>
+        </html>
+        """
+    
+    # 使用 srcdoc 替代 Base64，更稳定且无体积限制
+    import html
+    escaped_html = html.escape(full_html)
+    return f'<iframe srcdoc="{escaped_html}" width="100%" height="{height}" frameborder="0" style="border-radius:12px; border:none;"></iframe>'
 
 def fetch_history_data_unified():
     """
@@ -142,8 +154,13 @@ def fetch_history_data_unified():
             ORDER BY d ASC
         """)
         raw_df = pd.read_sql(query, session.bind, params={"start": start_time})
-        if raw_df.empty: return raw_df
-        raw_df['date_str'] = (raw_df['d'] + datetime.timedelta(hours=8)).dt.strftime('%Y-%m-%d')
+        if raw_df.empty: 
+            logger.warning("⚠️ 数据库中没有查询到过去 30 天的历史风险记录。")
+            return raw_df
+        
+        # 安全地处理日期格式转换
+        raw_df['d'] = pd.to_datetime(raw_df['d'])
+        raw_df['date_str'] = raw_df['d'].dt.strftime('%Y-%m-%d')
         return raw_df
     finally:
         session.close()
