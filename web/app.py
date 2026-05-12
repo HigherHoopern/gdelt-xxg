@@ -147,16 +147,18 @@ FIPS_TO_ISO = {
 def render_plotly_map():
     raw_df = fetch_history_data_unified()
     
-    # 核心修复：手动构造最近 31 天的完整日期轴，确保包含当前最新日期
+    # 核心修复：手动构造最近 31 天的完整日期轴
     today_dt = datetime.datetime.now()
     all_dates = [(today_dt - datetime.timedelta(days=i)).strftime('%Y-%m-%d') for i in range(31)]
     all_dates = sorted(list(set(all_dates)))
     
     if raw_df.empty: return "<div style='height:500px; display:flex; align-items:center; justify-content:center;'>暂无风险数据</div>"
     
-    # 全球化修改：从数据中提取所有出现的国家，而不是仅限于 ASEAN
-    all_countries = list(raw_df['country_code'].unique())
-    index_df = pd.MultiIndex.from_product([all_dates, all_countries], names=['date_str', 'country_code']).to_frame(index=False)
+    # 性能优化：仅保留在数据库中确实有数值的国家，减少地图数据包体积
+    active_countries = list(raw_df[raw_df['risk_index'] > 0]['country_code'].unique())
+    if not active_countries: active_countries = ['US'] # 兜底
+
+    index_df = pd.MultiIndex.from_product([all_dates, active_countries], names=['date_str', 'country_code']).to_frame(index=False)
     df = pd.merge(index_df, raw_df[['date_str', 'country_code', 'risk_index']], on=['date_str', 'country_code'], how='left')
     df['risk_index'] = df['risk_index'].fillna(0)
     
@@ -180,12 +182,13 @@ def render_plotly_map():
         visible=True, 
         projection_type="natural earth",
         showcountries=True, 
-        countrycolor="RebeccaPurple"
+        countrycolor="#d1d1d1"
     )
     
     fig.update_layout(
         title={'text': "全球风险指数动态", 'x': 0.95, 'y': 0.98, 'xanchor': 'right', 'font': {'size': 18}},
-        margin={"r":20,"t":80,"l":10,"b":0}, height=500
+        margin={"r":20,"t":80,"l":10,"b":0}, height=500,
+        dragmode=False # 禁用拖动提升性能
     )
     
     for frame in fig.frames:
@@ -410,49 +413,55 @@ if os.path.exists(html_path):
 else:
     HTML_TEMPLATE = ""
 
-# Gradio 界面 (回归 Gradio 原生 Tabs 架构)
+# Gradio 界面 (性能优化版)
 with gr.Blocks(title="全球地缘风险分析平台") as demo:
     with gr.Row(variant="compact"):
         with gr.Column(scale=4): 
             gr.Markdown("# 🌍 全球地缘政治风险分析平台")
         with gr.Column(scale=1): 
-            continent_selector = gr.Dropdown(choices=["全部"] + list(CONTINENT_MAPPING.values()), value="全部", label="🗺️ 按洲筛选", container=True)
+            continent_selector = gr.Dropdown(choices=["全部"] + list(CONTINENT_MAPPING.values()), value="全部", label="🗺️ 按洲筛选")
         with gr.Column(scale=1): 
-            country_selector = gr.Dropdown(choices=get_dynamic_country_choices(), value="全部", label="🌐 国家筛选", container=True)
+            country_selector = gr.Dropdown(choices=get_dynamic_country_choices(), value="全部", label="🌐 国家筛选")
 
-    with gr.Tabs():
-        with gr.TabItem("🗺️ 全球风险指数动态"):
+    with gr.Tabs() as tabs:
+        with gr.TabItem("🗺️ 全球风险指数动态", id="map_tab"):
             map_plot = gr.HTML(label="风险动态演变")
             
-        with gr.TabItem("📈 未来 5 日风险预测"):
+        with gr.TabItem("📈 未来 5 日风险预测", id="predict_tab"):
             predict_plot = gr.HTML(label="风险预测模型")
             
-        with gr.TabItem("📉 历史风险波动趋势"):
+        with gr.TabItem("📉 历史风险波动趋势", id="trend_tab"):
             trend_box = gr.HTML(label="30日波动趋势")
 
-        with gr.TabItem("📰 实时新闻"):
+        with gr.TabItem("📰 实时新闻", id="news_tab"):
             with gr.Row():
-                search_box = gr.Textbox(placeholder="🔍 输入关键词搜索过去 3 天的新闻...", label=None, show_label=False, container=False, scale=4)
+                search_box = gr.Textbox(placeholder="🔍 输入关键词搜索过去 3 天的新闻...", show_label=False, container=False, scale=4)
                 search_btn = gr.Button("搜索", variant="secondary", scale=1)
             news_html_box = gr.HTML()
 
-        with gr.TabItem("🤖 AI 研判报告"):
+        with gr.TabItem("🤖 AI 研判报告", id="report_tab"):
             with gr.Column(elem_id="ai-report-container"):
                 gr.Markdown("### 🤖 区域投资风险 AI 深度研判")
                 report_btn = gr.Button("🚀 立即生成研判报告", variant="primary")
                 with gr.Column(elem_id="ai-report-scroll-area"):
                     report_box = gr.Markdown("请在顶部选择国家后点击生成按钮。", elem_id="ai-report-box")
 
-    # 定义 outputs 列表，供下方所有更新函数使用
-    outputs = [map_plot, trend_box, predict_plot, news_html_box]
+    # 1. 按需更新逻辑 (Lazy Loading)
+    def on_tab_select(evt: gr.SelectData, country, continent, kw):
+        # 仅当点击某个 Tab 时，才去加载那个 Tab 的重型图表
+        if evt.value == "🗺️ 全球风险指数动态":
+            return render_plotly_map(), gr.update(), gr.update(), gr.update()
+        elif evt.value == "📈 未来 5 日风险预测":
+            return gr.update(), gr.update(), render_prediction_chart(country, continent), gr.update()
+        elif evt.value == "📉 历史风险波动趋势":
+            return gr.update(), render_line(country, continent), gr.update(), gr.update()
+        elif evt.value == "📰 实时新闻":
+            return gr.update(), gr.update(), gr.update(), update_news(country, continent, kw)
+        return [gr.update()]*4
 
-    # 1. 定义快速更新 (仅新闻)
-    def fast_news_update(country, continent, keyword):
-        return update_news(country, continent, keyword)
-
-    # 2. 定义全量更新 (仪表盘 + 新闻)
-    def full_dashboard_update(country, continent, keyword):
-        return update_dashboard(country, continent, keyword)
+    # 2. 全量刷新逻辑 (当筛选器变动时)
+    def refresh_all(country, continent, kw):
+        return update_dashboard(country, continent, kw)
 
     # 洲级联动
     def on_geo_change(continent):
@@ -461,19 +470,19 @@ with gr.Blocks(title="全球地缘风险分析平台") as demo:
 
     continent_selector.change(on_geo_change, inputs=[continent_selector], outputs=[country_selector])
     
-    # 统一仪表盘更新
+    # 核心优化：监听 Tab 切换事件实现懒加载
     dashboard_inputs = [country_selector, continent_selector, search_box]
-    demo.load(full_dashboard_update, inputs=dashboard_inputs, outputs=outputs)
-    
+    tabs.select(on_tab_select, inputs=dashboard_inputs, outputs=[map_plot, trend_box, predict_plot, news_html_box])
+
     # 交互更新：国家或洲改变时，刷新全量数据
-    country_selector.change(full_dashboard_update, inputs=dashboard_inputs, outputs=outputs)
-    continent_selector.change(full_dashboard_update, inputs=dashboard_inputs, outputs=outputs)
+    country_selector.change(refresh_all, inputs=dashboard_inputs, outputs=[map_plot, trend_box, predict_plot, news_html_box])
+    continent_selector.change(refresh_all, inputs=dashboard_inputs, outputs=[map_plot, trend_box, predict_plot, news_html_box])
     
-    # 性能优化：搜索和定时器仅刷新“实时新闻”列表
+    # 新闻专用更新 (定时器和搜索仅刷新新闻，极快)
     news_only_output = [news_html_box]
-    search_btn.click(fast_news_update, inputs=dashboard_inputs, outputs=news_only_output)
-    search_box.submit(fast_news_update, inputs=dashboard_inputs, outputs=news_only_output)
-    gr.Timer(60).tick(fast_news_update, inputs=dashboard_inputs, outputs=news_only_output)
+    search_btn.click(update_news, inputs=dashboard_inputs, outputs=news_only_output)
+    search_box.submit(update_news, inputs=dashboard_inputs, outputs=news_only_output)
+    gr.Timer(60).tick(update_news, inputs=dashboard_inputs, outputs=news_only_output)
 
     report_btn.click(generate_report, inputs=[country_selector], outputs=[report_box])
 
