@@ -46,43 +46,49 @@ class DataIngestor:
             return
         
         logger.info(f"正在下载 {table_type} 数据包: {url}")
-        try:
-            r = requests.get(url, timeout=30)
-            if r.status_code != 200:
-                logger.error(f"下载失败 ({r.status_code}): {url}")
-                return
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                r = requests.get(url, timeout=30)
+                if r.status_code != 200:
+                    logger.warning(f"下载尝试 {attempt+1} 失败 ({r.status_code}): {url}")
+                    time.sleep(2)
+                    continue
 
-            # 验证内容是否为 ZIP (GDELT 有时会返回错误 HTML 页面)
-            content = r.content
-            if not content.startswith(b'PK'):
-                logger.error(f"文件格式错误，不是有效的 ZIP 文件: {url}")
-                return
+                content = r.content
+                if not content.startswith(b'PK'):
+                    logger.warning(f"尝试 {attempt+1}：文件内容不是 ZIP 格式 (可能是服务器尚未同步完成)。")
+                    if attempt == max_retries - 1:
+                        logger.error(f"最终失败：{url} 的前 50 字节内容为: {content[:50]!r}")
+                    time.sleep(5)
+                    continue
 
-            z = zipfile.ZipFile(io.BytesIO(content))
-            file_name = z.namelist()[0]
-            
-            # GKG 使用制表符，Export/Mentions 也使用制表符
-            # 增加 encoding_errors='replace' 以解决部分 GDELT 文件中非 UTF-8 字符导致的解码失败问题
-            df = pd.read_csv(
-                z.open(file_name), 
-                sep='\t', 
-                header=None, 
-                engine='python', 
-                on_bad_lines='skip',
-                encoding='utf-8',
-                encoding_errors='replace'
-            )
-            
-            if table_type == 'export':
-                self.ingest_export(df)
-            elif table_type == 'mentions':
-                self.ingest_mentions(df)
-            elif table_type == 'gkg':
-                self.ingest_gkg(df)
+                z = zipfile.ZipFile(io.BytesIO(content))
+                file_name = z.namelist()[0]
                 
-            self.last_processed_url[table_type] = url
-        except Exception as e:
-            logger.error(f"处理 {table_type} 文件失败: {e}")
+                # 增加编码容错
+                df = pd.read_csv(
+                    z.open(file_name), 
+                    sep='\t', 
+                    header=None, 
+                    engine='python', 
+                    on_bad_lines='skip',
+                    encoding='utf-8',
+                    encoding_errors='replace'
+                )
+                
+                if table_type == 'export':
+                    self.ingest_export(df)
+                elif table_type == 'mentions':
+                    self.ingest_mentions(df)
+                elif table_type == 'gkg':
+                    self.ingest_gkg(df)
+                    
+                self.last_processed_url[table_type] = url
+                return # 成功处理，退出重试
+            except Exception as e:
+                logger.error(f"处理 {table_type} 文件失败 (尝试 {attempt+1}): {e}")
+                time.sleep(2)
 
     def ingest_export(self, df):
         # 映射 Export 的 61 列中的关键列

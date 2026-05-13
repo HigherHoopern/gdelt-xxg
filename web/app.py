@@ -125,17 +125,32 @@ def wrap_in_iframe(chart_obj, height="500px", is_plotly=False):
             <meta charset="utf-8">
             <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
             <script src="https://assets.pyecharts.org/assets/maps/world.js"></script>
-            <style>body {{ margin: 0; padding: 0; overflow: hidden; }}</style>
+            <style>
+                body, html {{ margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; }}
+                #loading {{ 
+                    position: absolute; width: 100%; height: 100%; 
+                    display: flex; align-items: center; justify-content: center; 
+                    font-family: sans-serif; color: #999; background: #fff;
+                }}
+            </style>
         </head>
         <body>
+            <div id="loading">图表渲染中... (如果长时间不显示，请检查网络或刷新)</div>
             {chart_html}
+            <script>
+                // 简单检测渲染是否完成并隐藏加载提示
+                setTimeout(function() {{
+                    var loading = document.getElementById('loading');
+                    if (loading) loading.style.display = 'none';
+                }}, 1000);
+            </script>
         </body>
         </html>
         """
     
-    # 采用 Base64 编码的 Data URI，兼容性最强
-    b64_html = base64.b64encode(full_html.encode('utf-8')).decode('utf-8')
-    return f'<iframe src="data:text/html;base64,{b64_html}" width="100%" height="{height}" frameborder="0" style="border-radius:12px; border:none;"></iframe>'
+    import html
+    escaped_html = html.escape(full_html)
+    return f'<iframe srcdoc="{escaped_html}" width="100%" height="{height}" frameborder="0" style="border-radius:12px; border:none; background:white;"></iframe>'
 
 def fetch_history_data_unified():
     """
@@ -488,16 +503,16 @@ with gr.Blocks(title="全球地缘风险分析平台") as demo:
             country_selector = gr.Dropdown(choices=get_dynamic_country_choices(), value="全部", label="🌐 国家筛选")
 
     with gr.Tabs() as tabs:
-        with gr.TabItem("🗺️ 全球风险指数动态", id="map_tab"):
-            map_plot = gr.HTML(label="风险动态演变")
+        with gr.TabItem("🗺️ 全球风险指数动态", id="map_tab") as tab1:
+            map_plot = gr.HTML(elem_id="map-plot-raw")
             
-        with gr.TabItem("📈 未来 5 日风险预测", id="predict_tab"):
-            predict_plot = gr.HTML(label="风险预测模型")
+        with gr.TabItem("📈 未来 5 日风险预测", id="predict_tab") as tab2:
+            predict_plot = gr.HTML(elem_id="predict-plot-raw")
             
-        with gr.TabItem("📉 历史风险波动趋势", id="trend_tab"):
-            trend_box = gr.HTML(label="30日波动趋势")
+        with gr.TabItem("📉 历史风险波动趋势", id="trend_tab") as tab3:
+            trend_box = gr.HTML(elem_id="trend-box-raw")
 
-        with gr.TabItem("📰 实时新闻", id="news_tab"):
+        with gr.TabItem("📰 实时新闻", id="news_tab") as tab4:
             with gr.Row():
                 search_box = gr.Textbox(placeholder="🔍 输入关键词搜索过去 3 天的新闻...", show_label=False, container=False, scale=4)
                 search_btn = gr.Button("搜索", variant="secondary", scale=1)
@@ -510,28 +525,17 @@ with gr.Blocks(title="全球地缘风险分析平台") as demo:
                 with gr.Column(elem_id="ai-report-scroll-area"):
                     report_box = gr.Markdown("请在顶部选择国家后点击生成按钮。", elem_id="ai-report-box")
 
-    # 1. 按需更新逻辑 (Lazy Loading)
-    def on_tab_select(evt: gr.SelectData, country, continent, kw):
-        # 核心修复：Gradio 的 evt.value 在设置了 id 后，返回的是 id 而不是 label
-        tab_id = evt.value
-        logger.info(f"📑 切换到标签页 ID: {tab_id}")
-        
-        if tab_id == "map_tab":
-            return render_map(), gr.update(), gr.update(), gr.update()
-        elif tab_id == "predict_tab":
-            return gr.update(), gr.update(), render_prediction_chart(country, continent), gr.update()
-        elif tab_id == "trend_tab":
-            return gr.update(), render_line(country, continent), gr.update(), gr.update()
-        elif tab_id == "news_tab":
-            return gr.update(), gr.update(), gr.update(), update_news(country, continent, kw)
-        return [gr.update()]*4
+    # 1. 核心修复：使用 TabItem 级别的 select 事件，比 Tabs.select 更稳定
+    tab1.select(fn=render_map, outputs=map_plot)
+    tab2.select(fn=render_prediction_chart, inputs=[country_selector, continent_selector], outputs=predict_plot)
+    tab3.select(fn=render_line, inputs=[country_selector, continent_selector], outputs=trend_box)
+    tab4.select(fn=update_news, inputs=[country_selector, continent_selector, search_box], outputs=news_html_box)
 
     # 2. 全量刷新逻辑 (当筛选器变动时)
-    def refresh_all(country, continent, kw):
-        # 同样需要返回 4 个结果，确保当前可见 Tab 被刷新
-        logger.info(f"🔄 筛选器变动，执行全量同步: {country}, {continent}")
-        map_h, line_h, pred_h, news_h = update_dashboard(country, continent, kw)
-        return map_h, line_h, pred_h, news_h
+    def refresh_visible_tab(country, continent, kw):
+        # 筛选器变动时，我们简单地刷新所有图表组件
+        logger.info(f"🔄 筛选器变动，更新全量图表...")
+        return render_map(), render_line(country, continent), render_prediction_chart(country, continent), update_news(country, continent, kw)
 
     # 洲级联动
     def on_geo_change(continent):
@@ -540,19 +544,18 @@ with gr.Blocks(title="全球地缘风险分析平台") as demo:
 
     continent_selector.change(on_geo_change, inputs=[continent_selector], outputs=[country_selector])
     
-    # 核心优化：监听 Tab 切换事件实现懒加载
+    # 初始化加载
     dashboard_inputs = [country_selector, continent_selector, search_box]
-    tabs.select(on_tab_select, inputs=dashboard_inputs, outputs=[map_plot, trend_box, predict_plot, news_html_box])
+    demo.load(refresh_visible_tab, inputs=dashboard_inputs, outputs=[map_plot, trend_box, predict_plot, news_html_box])
 
     # 交互更新：国家或洲改变时，刷新全量数据
-    country_selector.change(refresh_all, inputs=dashboard_inputs, outputs=[map_plot, trend_box, predict_plot, news_html_box])
-    continent_selector.change(refresh_all, inputs=dashboard_inputs, outputs=[map_plot, trend_box, predict_plot, news_html_box])
+    country_selector.change(refresh_visible_tab, inputs=dashboard_inputs, outputs=[map_plot, trend_box, predict_plot, news_html_box])
+    continent_selector.change(refresh_visible_tab, inputs=dashboard_inputs, outputs=[map_plot, trend_box, predict_plot, news_html_box])
     
-    # 新闻专用更新 (定时器和搜索仅刷新新闻，极快)
-    news_only_output = [news_html_box]
-    search_btn.click(update_news, inputs=dashboard_inputs, outputs=news_only_output)
-    search_box.submit(update_news, inputs=dashboard_inputs, outputs=news_only_output)
-    gr.Timer(60).tick(update_news, inputs=dashboard_inputs, outputs=news_only_output)
+    # 新闻专用更新
+    search_btn.click(update_news, inputs=dashboard_inputs, outputs=[news_html_box])
+    search_box.submit(update_news, inputs=dashboard_inputs, outputs=[news_html_box])
+    gr.Timer(60).tick(update_news, inputs=dashboard_inputs, outputs=[news_html_box])
 
     report_btn.click(generate_report, inputs=[country_selector], outputs=[report_box])
 
