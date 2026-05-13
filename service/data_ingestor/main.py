@@ -47,8 +47,18 @@ class DataIngestor:
         
         logger.info(f"正在下载 {table_type} 数据包: {url}")
         try:
-            r = requests.get(url)
-            z = zipfile.ZipFile(io.BytesIO(r.content))
+            r = requests.get(url, timeout=30)
+            if r.status_code != 200:
+                logger.error(f"下载失败 ({r.status_code}): {url}")
+                return
+
+            # 验证内容是否为 ZIP (GDELT 有时会返回错误 HTML 页面)
+            content = r.content
+            if not content.startswith(b'PK'):
+                logger.error(f"文件格式错误，不是有效的 ZIP 文件: {url}")
+                return
+
+            z = zipfile.ZipFile(io.BytesIO(content))
             file_name = z.namelist()[0]
             
             # GKG 使用制表符，Export/Mentions 也使用制表符

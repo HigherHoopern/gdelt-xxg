@@ -512,21 +512,26 @@ with gr.Blocks(title="全球地缘风险分析平台") as demo:
 
     # 1. 按需更新逻辑 (Lazy Loading)
     def on_tab_select(evt: gr.SelectData, country, continent, kw):
-        logger.info(f"📑 切换到标签页: {evt.value}")
-        # 仅当点击某个 Tab 时，才去加载那个 Tab 的重型图表
-        if evt.value == "🗺️ 全球风险指数动态":
+        # 核心修复：Gradio 的 evt.value 在设置了 id 后，返回的是 id 而不是 label
+        tab_id = evt.value
+        logger.info(f"📑 切换到标签页 ID: {tab_id}")
+        
+        if tab_id == "map_tab":
             return render_map(), gr.update(), gr.update(), gr.update()
-        elif evt.value == "📈 未来 5 日风险预测":
+        elif tab_id == "predict_tab":
             return gr.update(), gr.update(), render_prediction_chart(country, continent), gr.update()
-        elif evt.value == "📉 历史风险波动趋势":
+        elif tab_id == "trend_tab":
             return gr.update(), render_line(country, continent), gr.update(), gr.update()
-        elif evt.value == "📰 实时新闻":
+        elif tab_id == "news_tab":
             return gr.update(), gr.update(), gr.update(), update_news(country, continent, kw)
         return [gr.update()]*4
 
     # 2. 全量刷新逻辑 (当筛选器变动时)
     def refresh_all(country, continent, kw):
-        return update_dashboard(country, continent, kw)
+        # 同样需要返回 4 个结果，确保当前可见 Tab 被刷新
+        logger.info(f"🔄 筛选器变动，执行全量同步: {country}, {continent}")
+        map_h, line_h, pred_h, news_h = update_dashboard(country, continent, kw)
+        return map_h, line_h, pred_h, news_h
 
     # 洲级联动
     def on_geo_change(continent):
