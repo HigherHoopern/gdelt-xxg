@@ -115,38 +115,26 @@ def wrap_in_iframe(chart_obj, height="500px", is_plotly=False):
     if is_plotly:
         full_html = chart_obj.to_html(include_plotlyjs='cdn', full_html=True)
     else:
-        # 强制使用可靠的 CDN 资源并生成完整网页结构
+        # 强制使用可靠的 CDN 资源并生成全量 HTML
         chart_obj.js_host = "https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/"
-        chart_html = chart_obj.render_embed()
-        full_html = f"""
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <meta charset="utf-8">
-            <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
-            <script src="https://assets.pyecharts.org/assets/maps/world.js"></script>
-            <style>
-                body, html {{ margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; }}
-                #loading {{ 
-                    position: absolute; width: 100%; height: 100%; 
-                    display: flex; align-items: center; justify-content: center; 
-                    font-family: sans-serif; color: #999; background: #fff;
-                }}
-            </style>
-        </head>
-        <body>
-            <div id="loading">图表渲染中... (如果长时间不显示，请检查网络或刷新)</div>
-            {chart_html}
-            <script>
-                // 简单检测渲染是否完成并隐藏加载提示
-                setTimeout(function() {{
-                    var loading = document.getElementById('loading');
-                    if (loading) loading.style.display = 'none';
-                }}, 1000);
-            </script>
-        </body>
-        </html>
-        """
+        full_html = chart_obj.render_embed()
+        
+        # 如果 render_embed 已经包含了完整的 HTML 结构，就不再包装
+        if "<!DOCTYPE html>" not in full_html:
+            full_html = f"""
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="utf-8">
+                <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+                <script src="https://assets.pyecharts.org/assets/maps/world.js"></script>
+                <style>body, html {{ margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; }}</style>
+            </head>
+            <body>
+                {full_html}
+            </body>
+            </html>
+            """
     
     import html
     escaped_html = html.escape(full_html)

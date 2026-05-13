@@ -116,7 +116,7 @@ class RiskProcessor:
                     ORDER BY e."SOURCEURL", e."DATEADDED" DESC
                 ) sub
                 ORDER BY "DATEADDED" DESC
-                LIMIT 200
+                LIMIT 50
             """)
             tasks = main_session.execute(query).fetchall()
         finally:
