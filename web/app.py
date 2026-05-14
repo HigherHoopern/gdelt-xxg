@@ -75,7 +75,27 @@ COUNTRY_GEO_DATA = {
     'JP': {'name': '日本', 'iso': 'JPN', 'continent': 'Asia', 'lat': 36.2, 'lon': 138.2},
     'KR': {'name': '韩国', 'iso': 'KOR', 'continent': 'Asia', 'lat': 35.9, 'lon': 127.7},
     'BR': {'name': '巴西', 'iso': 'BRA', 'continent': 'South America', 'lat': -14.2, 'lon': -51.9},
-    'AU': {'name': '澳大利亚', 'iso': 'AUS', 'continent': 'Oceania', 'lat': -25.2, 'lon': 133.7}
+    'AU': {'name': '澳大利亚', 'iso': 'AUS', 'continent': 'Oceania', 'lat': -25.2, 'lon': 133.7},
+    # 额外补充 GDELT 常见代码
+    'CH': {'name': '中国', 'iso': 'CHN', 'continent': 'Asia', 'lat': 35.8, 'lon': 104.1},
+    'TW': {'name': '中国台湾', 'iso': 'TWN', 'continent': 'Asia', 'lat': 23.6, 'lon': 121.0},
+    'HK': {'name': '中国香港', 'iso': 'HKG', 'continent': 'Asia', 'lat': 22.3, 'lon': 114.1},
+    'KS': {'name': '韩国', 'iso': 'KOR', 'continent': 'Asia', 'lat': 35.9, 'lon': 127.7},
+    'JA': {'name': '日本', 'iso': 'JPN', 'continent': 'Asia', 'lat': 36.2, 'lon': 138.2},
+    'RS': {'name': '俄罗斯', 'iso': 'RUS', 'continent': 'Europe', 'lat': 61.5, 'lon': 105.3},
+    'UK': {'name': '英国', 'iso': 'GBR', 'continent': 'Europe', 'lat': 55.3, 'lon': -3.4},
+    'GM': {'name': '德国', 'iso': 'DEU', 'continent': 'Europe', 'lat': 51.1, 'lon': 10.4},
+    'FR': {'name': '法国', 'iso': 'FRA', 'continent': 'Europe', 'lat': 46.2, 'lon': 2.2},
+    'IT': {'name': '意大利', 'iso': 'ITA', 'continent': 'Europe', 'lat': 41.8, 'lon': 12.5},
+    'SP': {'name': '西班牙', 'iso': 'ESP', 'continent': 'Europe', 'lat': 40.4, 'lon': -3.7},
+    'CA': {'name': '加拿大', 'iso': 'CAN', 'continent': 'North America', 'lat': 56.1, 'lon': -106.3},
+    'MX': {'name': '墨西哥', 'iso': 'MEX', 'continent': 'North America', 'lat': 23.6, 'lon': -102.5},
+    'SF': {'name': '南非', 'iso': 'ZAF', 'continent': 'Africa', 'lat': -30.5, 'lon': 22.9},
+    'SG': {'name': '塞内加尔', 'iso': 'SEN', 'continent': 'Africa', 'lat': 14.5, 'lon': -14.4},
+    'NI': {'name': '尼日利亚', 'iso': 'NGA', 'continent': 'Africa', 'lat': 9.1, 'lon': 8.7},
+    'IZ': {'name': '伊拉克', 'iso': 'IRQ', 'continent': 'Middle East', 'lat': 33.2, 'lon': 43.6},
+    'IR': {'name': '伊朗', 'iso': 'IRN', 'continent': 'Middle East', 'lat': 32.4, 'lon': 53.6},
+    'TU': {'name': '土耳其', 'iso': 'TUR', 'continent': 'Middle East', 'lat': 38.9, 'lon': 35.2},
 }
 
 def get_dynamic_country_choices(continent_name="全部"):
