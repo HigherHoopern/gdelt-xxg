@@ -1,6 +1,5 @@
 import gradio as gr
 import pandas as pd
-import plotly.express as px
 import os
 from sqlalchemy import text
 from common.models import SessionLocal, DailyRiskIndex, RiskAnalysisData, RiskPrediction, RiskReport, RiskIndexHistory
@@ -191,8 +190,9 @@ FIPS_TO_ECHART_NAME = {
 def render_map(country_name="全部", continent_name="全部"):
     raw_df = fetch_history_data_unified()
     
-    today_dt = datetime.datetime.now()
-    all_dates = [(today_dt - datetime.timedelta(days=i)).strftime('%Y-%m-%d') for i in range(31)]
+    # 统一使用与数据对齐的 8 小时偏移逻辑构造日期轴
+    now_local = datetime.datetime.now() + datetime.timedelta(hours=8)
+    all_dates = [(now_local - datetime.timedelta(days=i)).strftime('%Y-%m-%d') for i in range(31)]
     all_dates = sorted(list(set(all_dates)))
     
     if raw_df.empty: return "<div style='height:850px; display:flex; align-items:center; justify-content:center;'>暂无风险数据</div>"
