@@ -465,10 +465,8 @@ with gr.Blocks(title="全球地缘政治风险分析平台") as demo:
         with gr.TabItem("🗺️ 风险动态地图"):
             map_plot = gr.HTML()
         
-        with gr.TabItem("📈 风险趋势预测"):
+        with gr.TabItem("📈 风险分析与预测"):
             predict_plot = gr.HTML()
-            
-        with gr.TabItem("📉 历史波动分析"):
             trend_box = gr.HTML()
 
         with gr.TabItem("📰 实时新闻"):
