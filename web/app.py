@@ -184,7 +184,7 @@ def render_plotly_map(country_name="全部", continent_name="全部"):
     
     fig.update_layout(
         title={'text': "全球风险指数动态演变", 'x': 0.5, 'y': 0.98, 'xanchor': 'center', 'font': {'size': 18}},
-        margin={"r":0,"t":50,"l":0,"b":0}, height=500
+        margin={"r":0,"t":50,"l":0,"b":0}, height=850
     )
     
     label_df = pd.DataFrame([{'name': v['name'], 'lat': v['lat'], 'lon': v['lon']} for v in COUNTRY_GEO_DATA.values()])
@@ -197,7 +197,7 @@ def render_plotly_map(country_name="全部", continent_name="全部"):
         frame.layout.coloraxis.cmin = 0
         frame.layout.coloraxis.cmax = 100
         
-    return wrap_in_iframe(fig, height="500px", is_plotly=True)
+    return wrap_in_iframe(fig, height="850px", is_plotly=True)
 
 def render_line(country_name="全部", continent_name="全部"):
     df = fetch_history_data_unified()
