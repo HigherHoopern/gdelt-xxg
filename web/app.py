@@ -370,8 +370,8 @@ def render_prediction_chart(country_name="全部", continent_name="全部"):
     )
     return wrap_in_iframe(line, height="500px")
 
-def update_news(country_name="全部", continent_name="全部"):
-    logger.info(f"📰 更新实时新闻: {country_name}, {continent_name}")
+def update_news(country_name="全部", continent_name="全部", search_keyword="", start_date=None, end_date=None):
+    logger.info(f"📰 更新实时新闻: {country_name}, {continent_name}, 关键词: {search_keyword}, 日期: {start_date} ~ {end_date}")
     code = next((k for k, v in COUNTRY_GEO_DATA.items() if v['name'] == country_name), None) if country_name != "全部" else None
     
     session = SessionLocal()
@@ -391,7 +391,22 @@ def update_news(country_name="全部", continent_name="全部"):
         else:
             geo_clause = "AND 1=0"
 
-    query_news = text(f"SELECT event_date, country_code, category, title, title_zh, summary_zh, url, image_url FROM risk_analysis_data WHERE {valid_filter} {geo_clause} ORDER BY event_date DESC LIMIT 50")
+    # 关键词过滤
+    search_clause = ""
+    if search_keyword and search_keyword.strip():
+        search_clause = "AND (title_zh ILIKE :kw OR summary_zh ILIKE :kw OR title ILIKE :kw)"
+        params["kw"] = f"%{search_keyword}%"
+
+    # 日期范围过滤
+    date_clause = ""
+    if start_date:
+        date_clause += " AND event_date >= :start"
+        params["start"] = start_date
+    if end_date:
+        date_clause += " AND event_date <= :end"
+        params["end"] = end_date
+
+    query_news = text(f"SELECT event_date, country_code, category, title, title_zh, summary_zh, url, image_url FROM risk_analysis_data WHERE {valid_filter} {geo_clause} {search_clause} {date_clause} ORDER BY event_date DESC LIMIT 50")
     news_df = pd.read_sql(query_news, session.bind, params=params)
     session.close()
     
@@ -436,12 +451,12 @@ def update_news(country_name="全部", continent_name="全部"):
     news_html += "</tbody></table></div>"
     return news_html
 
-def update_dashboard(country_name, continent_name):
+def update_dashboard(country_name, continent_name, search_keyword="", start_date=None, end_date=None):
     logger.info(f"🔄 更新仪表盘: {country_name}, {continent_name}")
     fig_map_html = render_map(country_name, continent_name)
     line_html = render_line(country_name, continent_name)
     predict_html = render_prediction_chart(country_name, continent_name)
-    news_html = update_news(country_name, continent_name)
+    news_html = update_news(country_name, continent_name, search_keyword, start_date, end_date)
     return fig_map_html, line_html, predict_html, news_html
 
 def generate_report(country_name):
@@ -470,6 +485,10 @@ with gr.Blocks(title="全球地缘政治风险分析平台") as demo:
             trend_box = gr.HTML()
 
         with gr.TabItem("📰 实时新闻"):
+            with gr.Row():
+                search_input = gr.Textbox(label="🔍 关键词搜索", placeholder="输入关键词...")
+                start_date_input = gr.DateTime(label="📅 开始日期", type="datetime")
+                end_date_input = gr.DateTime(label="📅 结束日期", type="datetime")
             news_html_box = gr.HTML()
 
         with gr.TabItem("🤖 AI 研判报告"):
@@ -487,11 +506,14 @@ with gr.Blocks(title="全球地缘政治风险分析平台") as demo:
     continent_selector.change(on_continent_change, inputs=[continent_selector], outputs=[country_selector])
 
     outputs = [map_plot, trend_box, predict_plot, news_html_box]
-    dashboard_inputs = [country_selector, continent_selector]
+    dashboard_inputs = [country_selector, continent_selector, search_input, start_date_input, end_date_input]
     
     demo.load(update_dashboard, inputs=dashboard_inputs, outputs=outputs)
     country_selector.change(update_dashboard, inputs=dashboard_inputs, outputs=outputs)
     continent_selector.change(update_dashboard, inputs=dashboard_inputs, outputs=outputs)
+    search_input.submit(update_dashboard, inputs=dashboard_inputs, outputs=outputs)
+    start_date_input.change(update_dashboard, inputs=dashboard_inputs, outputs=outputs)
+    end_date_input.change(update_dashboard, inputs=dashboard_inputs, outputs=outputs)
     
     gr.Timer(60).tick(update_dashboard, inputs=dashboard_inputs, outputs=outputs)
     report_btn.click(generate_report, inputs=[country_selector], outputs=[report_box])
