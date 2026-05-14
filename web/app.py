@@ -458,6 +458,13 @@ def update_visualizations(country_name, continent_name):
     predict_html = render_prediction_chart(country_name, continent_name)
     return fig_map_html, predict_html, line_html
 
+def generate_report(country_name):
+    if country_name == "全部": yield "请先选择具体国家。"
+    else:
+        code = next((k for k, v in COUNTRY_GEO_DATA.items() if v['name'] == country_name), None)
+        reporter = RiskReporter()
+        for chunk in reporter.generate_country_report(code, country_name=country_name): yield chunk
+
 # Gradio 界面
 with gr.Blocks(title="全球地缘政治风险分析平台") as demo:
     with gr.Row(variant="compact"):
