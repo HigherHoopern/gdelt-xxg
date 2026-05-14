@@ -395,7 +395,7 @@ def update_news(country_name="全部", continent_name="全部"):
 
 def update_dashboard(country_name, continent_name):
     logger.info(f"🔄 更新仪表盘: {country_name}, {continent_name}")
-    fig_map_html = render_plotly_map(country_name, continent_name)
+    fig_map_html = render_map(country_name, continent_name)
     line_html = render_line(country_name, continent_name)
     predict_html = render_prediction_chart(country_name, continent_name)
     news_html = update_news(country_name, continent_name)
