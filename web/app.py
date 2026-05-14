@@ -209,14 +209,19 @@ def render_map(country_name="全部", continent_name="全部"):
                 map_data.append((echart_name, round(float(row['risk_index']), 2)))
         
         m = Map()
-        m.add(
-            "风险指数",
-            map_data,
-            maptype="world",
-            is_map_symbol_show=False,
-            name_map=WORLD_NAME_MAP,
-            label_opts=opts.LabelOpts(is_show=False),
-        )
+        if map_data:
+            m.add(
+                "风险指数",
+                map_data,
+                maptype="world",
+                is_map_symbol_show=False,
+                name_map=WORLD_NAME_MAP,
+                label_opts=opts.LabelOpts(is_show=False),
+            )
+        else:
+            # 当天无数据时，添加一个空系列以维持地图显示，避免 IndexError
+            m.add("风险指数", [("China", None)], maptype="world", is_map_symbol_show=False, name_map=WORLD_NAME_MAP, label_opts=opts.LabelOpts(is_show=False))
+
         m.set_global_opts(
             title_opts=opts.TitleOpts(title=f"全球风险动态演变 ({date_str})", pos_left="center", pos_top="10px"),
             visualmap_opts=opts.VisualMapOpts(
