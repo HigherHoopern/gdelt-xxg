@@ -451,20 +451,12 @@ def update_news(country_name="全部", continent_name="全部", search_keyword="
     news_html += "</tbody></table></div>"
     return news_html
 
-def update_dashboard(country_name, continent_name, search_keyword="", start_date=None, end_date=None):
-    logger.info(f"🔄 更新仪表盘: {country_name}, {continent_name}")
+def update_visualizations(country_name, continent_name):
+    logger.info(f"📊 更新图表可视化: {country_name}, {continent_name}")
     fig_map_html = render_map(country_name, continent_name)
     line_html = render_line(country_name, continent_name)
     predict_html = render_prediction_chart(country_name, continent_name)
-    news_html = update_news(country_name, continent_name, search_keyword, start_date, end_date)
-    return fig_map_html, line_html, predict_html, news_html
-
-def generate_report(country_name):
-    if country_name == "全部": yield "请先选择具体国家。"
-    else:
-        code = next((k for k, v in COUNTRY_GEO_DATA.items() if v['name'] == country_name), None)
-        reporter = RiskReporter()
-        for chunk in reporter.generate_country_report(code, country_name=country_name): yield chunk
+    return fig_map_html, predict_html, line_html
 
 # Gradio 界面
 with gr.Blocks(title="全球地缘政治风险分析平台") as demo:
@@ -476,22 +468,22 @@ with gr.Blocks(title="全球地缘政治风险分析平台") as demo:
         with gr.Column(scale=1): 
             country_selector = gr.Dropdown(choices=get_dynamic_country_choices(), value="全部", label="🌐 国家筛选")
 
-    with gr.Tabs():
-        with gr.TabItem("🗺️ 风险动态地图"):
+    with gr.Tabs() as tabs:
+        with gr.TabItem("🗺️ 风险动态地图", id="map_tab"):
             map_plot = gr.HTML()
         
-        with gr.TabItem("📈 风险分析与预测"):
+        with gr.TabItem("📈 风险分析与预测", id="analysis_tab"):
             predict_plot = gr.HTML()
             trend_box = gr.HTML()
 
-        with gr.TabItem("📰 实时新闻"):
+        with gr.TabItem("📰 实时新闻", id="news_tab"):
             with gr.Row():
                 search_input = gr.Textbox(label="🔍 关键词搜索", placeholder="输入关键词...")
                 start_date_input = gr.DateTime(label="📅 开始日期", type="datetime")
                 end_date_input = gr.DateTime(label="📅 结束日期", type="datetime")
             news_html_box = gr.HTML()
 
-        with gr.TabItem("🤖 AI 研判报告"):
+        with gr.TabItem("🤖 AI 研判报告", id="report_tab"):
             with gr.Column(elem_id="ai-report-container"):
                 gr.Markdown("### 🤖 区域投资风险 AI 深度研判")
                 report_btn = gr.Button("🚀 立即生成研判报告", variant="primary")
@@ -505,17 +497,40 @@ with gr.Blocks(title="全球地缘政治风险分析平台") as demo:
 
     continent_selector.change(on_continent_change, inputs=[continent_selector], outputs=[country_selector])
 
-    outputs = [map_plot, trend_box, predict_plot, news_html_box]
-    dashboard_inputs = [country_selector, continent_selector, search_input, start_date_input, end_date_input]
+    # 核心优化：按需刷新逻辑
+    # 1. 只有地图 Tab 选中时刷新地图
+    # 2. 只有分析 Tab 选中时刷新预测和趋势图
+    # 3. 只有新闻 Tab 选中时刷新新闻列表
     
-    demo.load(update_dashboard, inputs=dashboard_inputs, outputs=outputs)
-    country_selector.change(update_dashboard, inputs=dashboard_inputs, outputs=outputs)
-    continent_selector.change(update_dashboard, inputs=dashboard_inputs, outputs=outputs)
-    search_input.submit(update_dashboard, inputs=dashboard_inputs, outputs=outputs)
-    start_date_input.change(update_dashboard, inputs=dashboard_inputs, outputs=outputs)
-    end_date_input.change(update_dashboard, inputs=dashboard_inputs, outputs=outputs)
+    vis_inputs = [country_selector, continent_selector]
+    news_inputs = [country_selector, continent_selector, search_input, start_date_input, end_date_input]
+
+    # 初始化加载
+    demo.load(render_map, inputs=vis_inputs, outputs=map_plot)
+    demo.load(render_prediction_chart, inputs=vis_inputs, outputs=predict_plot)
+    demo.load(render_line, inputs=vis_inputs, outputs=trend_box)
+    demo.load(update_news, inputs=news_inputs, outputs=news_html_box)
+
+    # 联动更新 (仅更新当前可能可见的内容)
+    # 地图和分析图表共享输入
+    country_selector.change(render_map, inputs=vis_inputs, outputs=map_plot)
+    country_selector.change(render_prediction_chart, inputs=vis_inputs, outputs=predict_plot)
+    country_selector.change(render_line, inputs=vis_inputs, outputs=trend_box)
+    country_selector.change(update_news, inputs=news_inputs, outputs=news_html_box)
+
+    continent_selector.change(render_map, inputs=vis_inputs, outputs=map_plot)
+    continent_selector.change(render_prediction_chart, inputs=vis_inputs, outputs=predict_plot)
+    continent_selector.change(render_line, inputs=vis_inputs, outputs=trend_box)
+    continent_selector.change(update_news, inputs=news_inputs, outputs=news_html_box)
+
+    # 新闻专属更新
+    search_input.submit(update_news, inputs=news_inputs, outputs=news_html_box)
+    start_date_input.change(update_news, inputs=news_inputs, outputs=news_html_box)
+    end_date_input.change(update_news, inputs=news_inputs, outputs=news_html_box)
     
-    gr.Timer(60).tick(update_dashboard, inputs=dashboard_inputs, outputs=outputs)
+    # 计时器仅刷新新闻（相对轻量）
+    gr.Timer(60).tick(update_news, inputs=news_inputs, outputs=news_html_box)
+    
     report_btn.click(generate_report, inputs=[country_selector], outputs=[report_box])
 
 if __name__ == "__main__":
