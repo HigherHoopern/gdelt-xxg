@@ -131,9 +131,28 @@ def wrap_in_iframe(chart_obj, height="500px", is_plotly=False):
     if is_plotly:
         full_html = chart_obj.to_html(include_plotlyjs='cdn', full_html=True)
     else:
-        full_html = chart_obj.render_embed()
+        # 针对 pyecharts 的增强包装，确保在 Base64 环境下也能正确加载地图
+        inner_html = chart_obj.render_embed()
+        full_html = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="utf-8">
+            <script type="text/javascript" src="https://assets.pyecharts.org/assets/echarts.min.js"></script>
+            <script type="text/javascript" src="https://assets.pyecharts.org/assets/maps/world.js"></script>
+            <style>
+                body, html {{ margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background-color: transparent; }}
+                /* 隐藏 pyecharts 默认生成的容器边距 */
+                .chart-container {{ margin: 0 !important; border: none !important; }}
+            </style>
+        </head>
+        <body>
+            {inner_html}
+        </body>
+        </html>
+        """
     b64_html = base64.b64encode(full_html.encode('utf-8')).decode('utf-8')
-    return f'<iframe src="data:text/html;base64,{b64_html}" width="100%" height="{height}" frameborder="0" style="border-radius:12px; background:white;"></iframe>'
+    return f'<iframe src="data:text/html;base64,{b64_html}" width="100%" height="{height}" frameborder="0" style="border-radius:12px; background:white; border:none;"></iframe>'
 
 def fetch_history_data_unified():
     """
