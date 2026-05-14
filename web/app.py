@@ -209,18 +209,17 @@ def render_map(country_name="全部", continent_name="全部"):
                 map_data.append((echart_name, round(float(row['risk_index']), 2)))
         
         m = Map()
-        if map_data:
-            m.add(
-                "风险指数",
-                map_data,
-                maptype="world",
-                is_map_symbol_show=False,
-                name_map=WORLD_NAME_MAP,
-                label_opts=opts.LabelOpts(is_show=False),
-            )
-        else:
-            # 当天无数据时，添加一个空系列以维持地图显示，避免 IndexError
-            m.add("风险指数", [("China", None)], maptype="world", is_map_symbol_show=False, name_map=WORLD_NAME_MAP, label_opts=opts.LabelOpts(is_show=False))
+        # 确保 map_data 永远不为空，避开 pyecharts 内部对 data_pair[0] 的访问导致的 IndexError
+        safe_map_data = map_data if map_data else [("China", None)]
+        
+        m.add(
+            "风险指数",
+            safe_map_data,
+            maptype="world",
+            is_map_symbol_show=False,
+            name_map=WORLD_NAME_MAP,
+            label_opts=opts.LabelOpts(is_show=False),
+        )
 
         m.set_global_opts(
             title_opts=opts.TitleOpts(title=f"全球风险动态演变 ({date_str})", pos_left="center", pos_top="10px"),
