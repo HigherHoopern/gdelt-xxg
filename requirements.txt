@@ -15,6 +15,7 @@ pyecharts
 python-decouple
 llama-index
 llama-index-llms-openai-like
+llama-index-llms-siliconflow
 llama-index-embeddings-openai-like
 llama-index-postprocessor-xinference-rerank
 llama-index-embeddings-siliconflow
