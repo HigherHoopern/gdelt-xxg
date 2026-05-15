@@ -38,6 +38,20 @@ services:
     networks:
       - global_network
 
+  global_rag:
+    build: .
+    container_name: gdelt_global_rag
+    restart: always
+    depends_on:
+      global_db:
+        condition: service_healthy
+    env_file: .env
+    command: python3 service/rag_service/api_server.py
+    volumes:
+      - .:/app
+    networks:
+      - global_network
+
   global_frontend:
     build: .
     container_name: gdelt_global_frontend
@@ -47,6 +61,8 @@ services:
     depends_on:
       global_db:
         condition: service_healthy
+      global_rag:
+        condition: service_started
     env_file: .env
     environment:
       - "DB_URL=postgresql+psycopg2://zhenxian:15821828225Lzx!@global_db/dgelt"
