@@ -62,10 +62,16 @@ try:
     # =============================================================================
     # LLM (大语言模型) 配置
     # =============================================================================
+    SILICONFLOW_KEY = "sk-nvfzirhgdkcpgmxhzrtpxcywpmlyrsrjhycowlirtfxjtokd"
+
     llm_model_name = config("LLM_MODEL_NAME", default="deepseek-ai/DeepSeek-V3")
     llm_base_url = config("LLM_BASE_URL", default="https://api.siliconflow.cn/v1")
-    llm_api_key = config("LLM_API_KEY", default="sk-nvfzirhgdkcpgmxhzrtpxcywpmlyrsrjhycowlirtfxjtokd")
-    
+
+    # 强制逻辑：如果环境变量为空或为 EMPTY，则回退到 SiliconFlow Key
+    llm_api_key = config("LLM_API_KEY", default=SILICONFLOW_KEY).strip()
+    if not llm_api_key or llm_api_key == "EMPTY":
+        llm_api_key = SILICONFLOW_KEY
+
     context_window_size = config("CONTEXT_WINDOW_SIZE", default=32768, cast=int)
     num_output = config("NUM_OUTPUT", default=2048, cast=int)
 
@@ -74,15 +80,25 @@ try:
     # =============================================================================
     embed_model_name = config('EMBED_MODEL_NAME', default="BAAI/bge-m3")
     embed_base_url = config('EMBED_BASE_URL', default="https://api.siliconflow.cn/v1")
-    embed_api_key = config('EMBED_API_KEY', default="sk-nvfzirhgdkcpgmxhzrtpxcywpmlyrsrjhycowlirtfxjtokd")
+
+    embed_api_key = config('EMBED_API_KEY', default=SILICONFLOW_KEY).strip()
+    if not embed_api_key or embed_api_key == "EMPTY":
+        embed_api_key = SILICONFLOW_KEY
 
     # =============================================================================
     # Reranker (重排序模型) 配置
     # =============================================================================
     reranker_name = config('RERANKER_NAME', default='BAAI/bge-reranker-v2-m3')
     reranker_base_url = config('RERANKER_BASE_URL', default='https://api.siliconflow.cn/v1')
-    # 针对 SiliconFlow 的 Reranker 同样需要 api_key，虽然在 llm.py 中处理，但这里先统一配置变量名
-    reranker_api_key = config('RERANKER_API_KEY', default="sk-nvfzirhgdkcpgmxhzrtpxcywpmlyrsrjhycowlirtfxjtokd")
+
+    reranker_api_key = config('RERANKER_API_KEY', default=SILICONFLOW_KEY).strip()
+    if not reranker_api_key or reranker_api_key == "EMPTY":
+        reranker_api_key = SILICONFLOW_KEY
+
+    # 打印掩码后的 Key 以供调试
+    print(f"--- [RAG Config] LLM Key: {llm_api_key[:6]}...{llm_api_key[-4:]} ---")
+    print(f"--- [RAG Config] Embed Key: {embed_api_key[:6]}...{embed_api_key[-4:]} ---")
+
     
     # =============================================================================
     # Redis 配置 (修改默认值为 localhost)
