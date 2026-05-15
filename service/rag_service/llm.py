@@ -32,9 +32,7 @@ def config_llm():
     logging.info(f"--- RAG 模型初始化 (Provider: {provider}) ---")
 
     if provider == "siliconflow":
-        # 1. 初始化 LLM
-        # 直接使用 OpenAI 类，但在 api_base 中指定 SiliconFlow 地址
-        # 这种方式比 OpenAILike 更能强制 API Key 的传递
+        # 1. 初始化 LLM (SiliconFlow 推荐使用 OpenAI 类适配其 V3 模型)
         llm = OpenAI(
             model=llm_model_name,
             api_key=llm_api_key,
@@ -42,16 +40,15 @@ def config_llm():
             max_tokens=num_output,
             temperature=0.1,
             timeout=600,
-            reuse_client=False # 强制每次创建新客户端，避免干扰
+            reuse_client=False
         )
 
-        # 2. 初始化 Embedding
-        # 同样使用标准 OpenAIEmbedding 配合自定义 api_base
-        emb = OpenAIEmbedding(
-            model=embed_model_name,
+        # 2. 初始化 Embedding (使用 LlamaIndex 专门为 SiliconFlow 提供的类)
+        # 这可以解决 'BAAI/bge-m3' 不是 OpenAI 有效模型名称的报错
+        from llama_index.embeddings.siliconflow import SiliconFlowEmbedding
+        emb = SiliconFlowEmbedding(
+            model_name=embed_model_name,
             api_key=embed_api_key,
-            api_base=embed_base_url,
-            timeout=600,
         )
 
         # 3. 初始化 Reranker
