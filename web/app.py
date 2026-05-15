@@ -5,6 +5,7 @@ from sqlalchemy import text
 from common.models import SessionLocal, DailyRiskIndex, RiskAnalysisData, RiskPrediction, RiskReport, RiskIndexHistory
 from config.settings import REGIONAL_COUNTRIES
 from service.reporter.main import RiskReporter
+from service.news_rag import news_rag_service
 import datetime
 import base64
 from common.logger import setup_logger
@@ -248,6 +249,7 @@ def render_map(country_name="全部", continent_name="全部"):
                 map_data.append((echart_name, round(float(row['risk_index']), 2)))
         
         m = Map()
+        # 确保 map_data 永远不为空，避开 pyecharts 内部对 data_pair[0] 的访问导致的 IndexError
         safe_map_data = map_data if map_data else [("China", None)]
         
         m.add(
@@ -469,6 +471,18 @@ def generate_report(country_name):
         reporter = RiskReporter()
         for chunk in reporter.generate_country_report(code, country_name=country_name): yield chunk
 
+def rag_chat(query, history):
+    """RAG 问答函数，支持流式输出"""
+    if not query:
+        return ""
+    
+    response_gen = news_rag_service.query(query)
+    full_response = ""
+    # LlamaIndex streaming response object provides response_gen
+    for token in response_gen.response_gen:
+        full_response += token
+        yield full_response
+
 # Gradio 界面
 with gr.Blocks(title="全球地缘政治风险分析平台") as demo:
     with gr.Row(variant="compact"):
@@ -502,6 +516,14 @@ with gr.Blocks(title="全球地缘政治风险分析平台") as demo:
                 with gr.Column(elem_id="ai-report-scroll-area"):
                     report_box = gr.Markdown("请在顶部选择国家后点击生成按钮。", elem_id="ai-report-box")
 
+        with gr.TabItem("💬 智能问答", id="qa_tab"):
+            gr.Markdown("### 💬 基于过去 7 天时政新闻的智能问答")
+            gr.ChatInterface(
+                fn=rag_chat,
+                examples=["请介绍最近的中美关系", "最近东南亚有哪些重大军事动向？", "中东地区的风险主要集中在哪些方面？"],
+                cache_examples=False,
+            )
+
     # 洲级联动
     def on_continent_change(continent):
         new_choices = get_dynamic_country_choices(continent)
@@ -519,19 +541,18 @@ with gr.Blocks(title="全球地缘政治风险分析平台") as demo:
     tab_analysis.select(update_visualizations, inputs=vis_inputs, outputs=[predict_plot, trend_box])
     tab_news.select(update_news, inputs=news_inputs, outputs=news_html_box)
 
-    # 2. 初始加载：只加载第一个 Tab（地图）和新闻（可选，这里只加载地图）
+    # 2. 初始加载：只加载第一个 Tab（地图）
     demo.load(render_map, inputs=vis_inputs, outputs=map_plot)
     
-    # 3. 筛选器变动时，不立即更新所有 Tab，只更新当前可能激活的内容
-    # 为了简化，我们让筛选器只更新地图；如果用户在其他 Tab 筛选，通过 Tab 的 select 事件实现更新
+    # 3. 筛选器变动时，仅更新地图（当前可见）
     country_selector.change(render_map, inputs=vis_inputs, outputs=map_plot)
     continent_selector.change(render_map, inputs=vis_inputs, outputs=map_plot)
     
-    # 4. 新闻搜索改为手动触发，避免频繁输入导致的卡顿
+    # 4. 新闻搜索改为手动触发
     search_btn.click(update_news, inputs=news_inputs, outputs=news_html_box)
     search_input.submit(update_news, inputs=news_inputs, outputs=news_html_box)
     
-    # 5. 定时器：仅在后台低频更新新闻数据（不自动刷地图，减少压力）
+    # 5. 定时器：仅刷新新闻
     gr.Timer(120).tick(update_news, inputs=news_inputs, outputs=news_html_box)
     
     report_btn.click(generate_report, inputs=[country_selector], outputs=[report_box])
