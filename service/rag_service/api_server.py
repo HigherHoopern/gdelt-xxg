@@ -35,9 +35,16 @@ DB_URL = os.getenv("DB_URL", DEFAULT_DB_URL)
 
 class RAGCore:
     def __init__(self):
-        logger.info(f"🚀 初始化 RAG 引擎: {LLM_MODEL}")
-        logger.info(f"🔗 正在连接数据库: {DB_URL.split('@')[-1]}") # 掩码打印 DB 地址
+        logger.info(f"--- [RAG CORE STARTUP] ---")
+        logger.info(f"LLM Model: {LLM_MODEL}")
+        # 调试：打印 Key 的精确信息
+        key_status = "PRESENT" if SF_KEY else "MISSING"
+        masked_key = f"{SF_KEY[:6]}...{SF_KEY[-4:]}" if SF_KEY else "N/A"
+        logger.info(f"API Key Status: {key_status} | Masked: {masked_key} | Length: {len(SF_KEY) if SF_KEY else 0}")
         
+        # 预检：直接测试 SiliconFlow API 连通性 (不依赖 LlamaIndex)
+        self.test_raw_api()
+
         self.llm = SiliconFlow(model=LLM_MODEL, api_key=SF_KEY, max_tokens=2048)
         self.embed_model = SiliconFlowEmbedding(model_name=EMBED_MODEL, api_key=SF_KEY)
         self.reranker = SiliconFlowRerank(model=RERANKER_MODEL, api_key=SF_KEY, top_n=5)
@@ -48,6 +55,21 @@ class RAGCore:
         self.index = None
         self.last_update = None
         self.engine = create_engine(DB_URL)
+        logger.info(f"--- [RAG CORE READY] ---")
+
+    def test_raw_api(self):
+        """使用 requests 直接测试 API Key 是否能通"""
+        import requests
+        try:
+            test_url = "https://api.siliconflow.cn/v1/user/info"
+            headers = {"Authorization": f"Bearer {SF_KEY}"}
+            resp = requests.get(test_url, headers=headers, timeout=10)
+            if resp.status_code == 200:
+                logger.info("✅ SiliconFlow API 鉴权测试成功！(Direct HTTP)")
+            else:
+                logger.error(f"❌ SiliconFlow API 鉴权失败！状态码: {resp.status_code} | 响应: {resp.text}")
+        except Exception as e:
+            logger.error(f"⚠️ 无法连接到 SiliconFlow 进行预检: {e}")
 
     def fetch_data(self):
         since_date = datetime.datetime.now() - datetime.timedelta(days=7)
