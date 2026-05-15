@@ -62,20 +62,20 @@ try:
     # =============================================================================
     # LLM (大语言模型) 配置
     # =============================================================================
-    SILICONFLOW_KEY = "sk-nvfzirhgdkcpgmxhzrtpxcywpmlyrsrjhycowlirtfxjtokd"
+    # 用户提供的有效 SiliconFlow Key
+    SF_KEY = "sk-nvfzirhgdkcpgmxhzrtpxcywpmlyrsrjhycowlirtfxjtokd"
 
-    llm_model_name = config("LLM_MODEL_NAME", default="deepseek-ai/DeepSeek-V3")
-    llm_base_url = config("LLM_BASE_URL", default="https://api.siliconflow.cn/v1")
-
-    # 强制逻辑：如果环境变量为空或为 EMPTY，则回退到 SiliconFlow Key
-    # 彻底杜绝引号干扰：直接替换掉所有引号
-    def clean_key(v):
-        if not v or v == "EMPTY": return SILICONFLOW_KEY
+    llm_model_name = config("RAG_LLM_MODEL_NAME", default="deepseek-ai/DeepSeek-V3")
+    llm_base_url = config("RAG_LLM_BASE_URL", default="https://api.siliconflow.cn/v1")
+    
+    def clean_rag_key(v):
+        if not v or str(v).strip() in ["", "EMPTY", "None", "none"]: return SF_KEY
         return str(v).strip().replace('"', '').replace("'", "")
 
-    llm_api_key = clean_key(config("LLM_API_KEY", default=SILICONFLOW_KEY))
-    embed_api_key = clean_key(config('EMBED_API_KEY', default=SILICONFLOW_KEY))
-    reranker_api_key = clean_key(config('RERANKER_API_KEY', default=SILICONFLOW_KEY))
+    # 使用专门的 RAG_ 前缀，避免与翻译用的 LLM_API_KEY (可能是空或 ollama) 冲突
+    llm_api_key = clean_rag_key(config("RAG_LLM_API_KEY", default=SF_KEY))
+    embed_api_key = clean_rag_key(config('RAG_EMBED_API_KEY', default=SF_KEY))
+    reranker_api_key = clean_rag_key(config('RAG_RERANKER_API_KEY', default=SF_KEY))
 
     context_window_size = config("CONTEXT_WINDOW_SIZE", default=32768, cast=int)
     num_output = config("NUM_OUTPUT", default=2048, cast=int)
@@ -83,18 +83,20 @@ try:
     # =============================================================================
     # Embedding (嵌入模型) 配置
     # =============================================================================
-    embed_model_name = config('EMBED_MODEL_NAME', default="BAAI/bge-m3")
-    embed_base_url = config('EMBED_BASE_URL', default="https://api.siliconflow.cn/v1")
+    embed_model_name = config('RAG_EMBED_MODEL_NAME', default="BAAI/bge-m3")
+    embed_base_url = config('RAG_EMBED_BASE_URL', default="https://api.siliconflow.cn/v1")
 
     # =============================================================================
     # Reranker (重排序模型) 配置
     # =============================================================================
-    reranker_name = config('RERANKER_NAME', default='BAAI/bge-reranker-v2-m3')
-    reranker_base_url = config('RERANKER_BASE_URL', default='https://api.siliconflow.cn/v1')
+    reranker_name = config('RAG_RERANKER_NAME', default='BAAI/bge-reranker-v2-m3')
+    reranker_base_url = config('RAG_RERANKER_BASE_URL', default='https://api.siliconflow.cn/v1')
 
-    # 打印掩码后的 Key 以供调试
-    print(f"--- [RAG Config] LLM Key: {llm_api_key[:6]}...{llm_api_key[-4:]} (len: {len(llm_api_key)}) ---")
-    print(f"--- [RAG Config] Embed Key: {embed_api_key[:6]}...{embed_api_key[-4:]} (len: {len(embed_api_key)}) ---")
+    # 打印最终生效的配置信息 (掩码处理)
+    print(f"--- [RAG System Initializing] ---")
+    print(f"LLM: {llm_model_name} | Key: {llm_api_key[:6]}...{llm_api_key[-4:]}")
+    print(f"Embed: {embed_model_name} | Key: {embed_api_key[:6]}...{embed_api_key[-4:]}")
+    print(f"Reranker: {reranker_name}")
     
     # =============================================================================
     # Redis 配置 (修改默认值为 localhost)
