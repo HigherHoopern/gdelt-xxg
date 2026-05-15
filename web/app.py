@@ -397,11 +397,17 @@ def update_news(country_name="全部", continent_name="全部", search_keyword="
         search_clause = "AND (title_zh ILIKE :kw OR summary_zh ILIKE :kw OR title ILIKE :kw)"
         params["kw"] = f"%{search_keyword}%"
 
-    # 日期范围过滤
+    # 日期范围过滤：默认显示过去 36 小时
     date_clause = ""
     if start_date:
         date_clause += " AND event_date >= :start"
         params["start"] = start_date
+    else:
+        # 如果用户没选开始日期，强制限制为过去 36 小时
+        since_36h = datetime.datetime.now() - datetime.timedelta(hours=36)
+        date_clause += " AND event_date >= :since_36h"
+        params["since_36h"] = since_36h
+
     if end_date:
         date_clause += " AND event_date <= :end"
         params["end"] = end_date
