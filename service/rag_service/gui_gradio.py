@@ -34,7 +34,7 @@ def stream_predict(message, session_id):
 
     try:
         # 强制禁用代理
-        with httpx.Client(trust_env=False, timeout=60.0) as client:
+        with httpx.Client(trust_env=False, timeout=300.0) as client:
             with client.stream("POST", API_URL, json=payload) as r:
                 if r.status_code == 422:
                     yield f"❌ 422 错误: 后端无法解析请求内容。Payload: {payload}", session_id

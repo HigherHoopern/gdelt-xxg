@@ -35,7 +35,7 @@ async def main_chat_flow(message, history, session_id, session_titles, all_sessi
     
     full_response = ""
     try:
-        async with httpx.AsyncClient(timeout=120.0) as client:
+        async with httpx.AsyncClient(timeout=300.0) as client:
             async with client.stream("POST", f"{API_BASE}/chat", json=payload) as response:
                 if response.status_code != 200:
                     err_data = await response.aread()

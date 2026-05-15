@@ -1,10 +1,13 @@
 import requests
 import logging
+import os
 
 logger = logging.getLogger("NewsRAG")
 
 class NewsRAGClient:
-    def __init__(self, service_url="http://global_rag:8000"):
+    def __init__(self, service_url=None):
+        if service_url is None:
+            service_url = os.getenv("RAG_SERVICE_URL", "http://global_rag:8000")
         self.url = f"{service_url}/query"
 
     def query(self, query_str):
@@ -15,7 +18,7 @@ class NewsRAGClient:
                 self.url, 
                 json={"prompt": query_str}, 
                 stream=True, 
-                timeout=120
+                timeout=300
             )
             
             if response.status_code != 200:
