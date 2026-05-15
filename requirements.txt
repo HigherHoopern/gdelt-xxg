@@ -12,3 +12,10 @@ google-generativeai
 numpy
 python-dotenv
 pyecharts
+python-decouple
+llama-index
+llama-index-llms-openai-like
+llama-index-embeddings-openai-like
+llama-index-postprocessor-xinference-rerank
+llama-index-embeddings-siliconflow
+llama-index-postprocessor-siliconflow-rerank
