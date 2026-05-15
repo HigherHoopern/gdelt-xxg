@@ -61,9 +61,9 @@ try:
     # =============================================================================
     # LLM (大语言模型) 配置
     # =============================================================================
-    llm_model_name = config("LLM_MODEL_NAME")
-    llm_base_url = config("LLM_BASE_URL")
-    llm_api_key = config("LLM_API_KEY", default="EMPTY")
+    llm_model_name = config("LLM_MODEL_NAME", default="deepseek-ai/DeepSeek-V3")
+    llm_base_url = config("LLM_BASE_URL", default="https://api.siliconflow.cn/v1")
+    llm_api_key = config("LLM_API_KEY", default="sk-nvfzirhgdkcpgmxhzrtpxcywpmlyrsrjhycowlirtfxjtokd")
     
     context_window_size = config("CONTEXT_WINDOW_SIZE", default=32768, cast=int)
     num_output = config("NUM_OUTPUT", default=2048, cast=int)
@@ -71,15 +71,15 @@ try:
     # =============================================================================
     # Embedding (嵌入模型) 配置
     # =============================================================================
-    embed_model_name = config('EMBED_MODEL_NAME')
-    embed_base_url = config('EMBED_BASE_URL')
-    embed_api_key = config('EMBED_API_KEY', default="EMPTY")
+    embed_model_name = config('EMBED_MODEL_NAME', default="BAAI/bge-m3")
+    embed_base_url = config('EMBED_BASE_URL', default="https://api.siliconflow.cn/v1")
+    embed_api_key = config('EMBED_API_KEY', default="sk-nvfzirhgdkcpgmxhzrtpxcywpmlyrsrjhycowlirtfxjtokd")
 
     # =============================================================================
     # Reranker (重排序模型) 配置
     # =============================================================================
-    reranker_name = config('RERANKER_NAME', default='')
-    reranker_base_url = config('RERANKER_BASE_URL', default='')
+    reranker_name = config('RERANKER_NAME', default='BAAI/bge-reranker-v2-m3')
+    reranker_base_url = config('RERANKER_BASE_URL', default='https://api.siliconflow.cn/v1')
     
     # =============================================================================
     # Redis 配置 (修改默认值为 localhost)
