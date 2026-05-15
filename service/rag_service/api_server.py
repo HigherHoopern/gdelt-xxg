@@ -76,7 +76,18 @@ class RAGCore:
             if df.empty: 
                 logger.warning("数据库中暂无过去7天的新闻。")
                 return False
-            docs = [Document(text=f"日期:{r['event_date']} 国家:{r['country_code']} 标题:{r['title_zh']} 内容:{r['summary_zh']}") for _, r in df.iterrows()]
+            
+            docs = []
+            for _, r in df.iterrows():
+                # 将文本和元数据分离，以便后续引用
+                text_content = f"标题:{r['title_zh']}\n内容:{r['summary_zh']}"
+                metadata = {
+                    "title": r['title_zh'],
+                    "date": str(r['event_date']),
+                    "country": r['country_code']
+                }
+                docs.append(Document(text=text_content, metadata=metadata))
+            
             self.index = VectorStoreIndex.from_documents(docs)
             self.last_update = datetime.datetime.now()
             logger.info(f"索引已刷新: {len(docs)} 条资讯")
@@ -91,8 +102,13 @@ class RAGCore:
         if not self.index:
             return type('obj', (object,), {'response_gen': iter(["抱歉，RAG 索引构建失败或暂无数据，请稍后再试。"])})
         
-        query_engine = self.index.as_query_engine(similarity_top_k=10, node_postprocessors=[self.reranker], streaming=True)
-        return query_engine.query(f"基于过去7天新闻回答：{prompt}")
+        # 启用流式查询
+        query_engine = self.index.as_query_engine(
+            similarity_top_k=10, 
+            node_postprocessors=[self.reranker], 
+            streaming=True
+        )
+        return query_engine.query(f"请基于过去7天的时政新闻，简洁专业地回答：{prompt}")
 
 rag_core = RAGCore()
 app = FastAPI(title="GDELT RAG Service")
@@ -105,8 +121,24 @@ async def query(request: QueryRequest):
     try:
         response = rag_core.query_stream(request.prompt)
         def event_generator():
+            # 1. 逐步输出回答内容
             for token in response.response_gen:
                 yield token
+            
+            # 2. 回答结束后，输出引用的来源
+            if hasattr(response, 'source_nodes') and response.source_nodes:
+                yield "\n\n**🔍 引用来源：**\n"
+                seen_sources = set()
+                count = 1
+                for node in response.source_nodes:
+                    metadata = node.node.metadata
+                    source_id = f"{metadata.get('date')} - {metadata.get('title')}"
+                    if source_id not in seen_sources:
+                        yield f"{count}. [{metadata.get('date')}] {metadata.get('title')}\n"
+                        seen_sources.add(source_id)
+                        count += 1
+                        if count > 5: break # 最多展示5个来源
+        
         return StreamingResponse(event_generator(), media_type="text/plain")
     except Exception as e:
         logger.error(f"查询请求遇到错误: {e}")

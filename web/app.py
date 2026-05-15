@@ -22,7 +22,8 @@ CurrentConfig.ONLINE_HOST = "https://assets.pyecharts.org/assets/"
 logger = setup_logger("WebDashboard")
 
 # 全局品牌主色调
-PRIMARY_COLOR = "#1467DF"
+PRIMARY_COLOR = "#003C3D"
+ACCENT_COLOR = "#00DEA5"
 
 # 洲映射表
 CONTINENT_MAPPING = {
@@ -558,14 +559,35 @@ with gr.Blocks(title="全球地缘政治风险分析平台") as demo:
     report_btn.click(generate_report, inputs=[country_selector], outputs=[report_box])
 
 if __name__ == "__main__":
-    custom_theme = gr.themes.Default(primary_hue=gr.themes.Color(c50="#e6f0ff", c100="#cce0ff", c200="#99c2ff", c300="#66a3ff", c400="#3385ff", c500="#1467DF", c600="#1158c4", c700="#0d469b", c800="#0a3673", c900="#07264a", c950="#04152b"))
+    # 定义符合用户要求的自定义主题
+    custom_theme = gr.themes.Default(
+        primary_hue=gr.themes.Color(
+            c50="#e6f0f0", c100="#cce2e2", c200="#99c5c5", c300="#66a7a7", c400="#338a8a", 
+            c500=PRIMARY_COLOR, c600="#003536", c700="#002d2e", c800="#002627", c900="#001f20", c950="#001819"
+        ),
+    ).set(
+        body_background_fill="#F7F9F9",
+        # 按钮基础样式
+        button_primary_background_fill=PRIMARY_COLOR,
+        button_primary_text_color=ACCENT_COLOR,
+        # 按钮悬停样式
+        button_primary_background_fill_hover="#00696a",
+        button_primary_text_color_hover="#FFFFFF",
+        # 输入框聚焦边框色
+        input_background_fill_focus="white",
+        # 边框与圆角
+        block_border_width="1px",
+        block_radius="8px"
+    )
+
     demo.launch(server_name="0.0.0.0", server_port=8090, theme=custom_theme, 
         css=f"""
-        .gradio-container {{max-width: 98% !important; background-color: #f4f7f9 !important;}}
+        .gradio-container {{max-width: 98% !important; background-color: #F7F9F9 !important;}}
         footer {{display: none !important;}}
-        button.primary, .gr-button-primary {{ background-color: {PRIMARY_COLOR} !important; border-color: {PRIMARY_COLOR} !important; color: white !important; }}
+        button.primary, .gr-button-primary {{ background-color: {PRIMARY_COLOR} !important; color: {ACCENT_COLOR} !important; border-radius: 8px !important; }}
+        button.primary:hover, .gr-button-primary:hover {{ background-color: #00696a !important; color: #FFFFFF !important; }}
         .tabs .tabitem.selected {{ border-color: {PRIMARY_COLOR} !important; }}
-        #ai-report-container {{ height: 1000px !important; border: 1px solid #e0e0e0; padding: 15px; border-radius: 10px; background: #ffffff; box-shadow: 0 2px 12px rgba(0,0,0,0.08); display: flex !important; flex-direction: column !important; }}
+        #ai-report-container {{ height: 1000px !important; border: 1px solid #e0e0e0; padding: 15px; border-radius: 8px; background: #ffffff; box-shadow: 0 2px 12px rgba(0,0,0,0.08); display: flex !important; flex-direction: column !important; }}
         #ai-report-scroll-area {{ flex-grow: 1 !important; height: 850px !important; overflow-y: auto !important; border-top: 1px solid #eee; margin-top: 10px; padding-top: 10px; }}
         #ai-report-box {{ min-height: 100%; font-family: sans-serif; line-height: 1.5; color: #2c3e50; }}
         """)
