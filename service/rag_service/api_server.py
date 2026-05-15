@@ -43,6 +43,8 @@ class RAGCore:
         
         Settings.llm = self.llm
         Settings.embed_model = self.embed_model
+        Settings.chunk_size = 2048
+        Settings.chunk_overlap = 50
         
         self.index = None
         self.last_update = None
