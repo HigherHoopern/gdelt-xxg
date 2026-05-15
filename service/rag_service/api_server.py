@@ -67,16 +67,24 @@ class RAGCore:
             logger.error(f"⚠️ 预检连接超时: {e}")
 
     def fetch_data(self):
-        since_date = datetime.datetime.now() - datetime.timedelta(days=7)
-        query = text("SELECT title_zh, summary_zh, event_date, country_code FROM risk_analysis_data WHERE event_date >= :since AND title_zh != ''")
-        with self.engine.connect() as conn:
-            return pd.read_sql(query, conn, params={"since": since_date})
+        try:
+            since_date = datetime.datetime.now() - datetime.timedelta(days=7)
+            logger.info(f"正在从数据库读取新闻数据 (从 {since_date} 至今)...")
+            query = text("SELECT title_zh, summary_zh, event_date, country_code FROM risk_analysis_data WHERE event_date >= :since AND title_zh != ''")
+            with self.engine.connect() as conn:
+                df = pd.read_sql(query, conn, params={"since": since_date})
+                logger.info(f"数据库读取完成，共获取 {len(df)} 条新闻。")
+                return df
+        except Exception as e:
+            logger.error(f"数据库读取异常: {e}")
+            return pd.DataFrame()
 
     def refresh_index(self):
         try:
+            logger.info("开始构建 RAG 向量索引...")
             df = self.fetch_data()
             if df.empty: 
-                logger.warning("数据库中暂无过去7天的新闻。")
+                logger.warning("数据库中暂无过去7天的新闻，跳过索引构建。")
                 return False
             
             docs = []
@@ -90,19 +98,30 @@ class RAGCore:
                 }
                 docs.append(Document(text=text_content, metadata=metadata))
             
+            logger.info(f"正在调用 Embedding 接口进行向量化 (共 {len(docs)} 个文档)...")
             self.index = VectorStoreIndex.from_documents(docs)
             self.last_update = datetime.datetime.now()
-            logger.info(f"索引已刷新: {len(docs)} 条资讯")
+            logger.info(f"✅ 索引已刷新: {len(docs)} 条资讯向量化完成")
             return True
         except Exception as e:
-            logger.error(f"构建索引失败: {e}")
+            logger.error(f"❌ 构建索引失败: {e}")
             return False
 
     def query_stream(self, prompt: str):
-        if not self.index or (datetime.datetime.now() - self.last_update).total_seconds() > 3600:
-            self.refresh_index()
+        # 如果索引为空，尝试同步刷新一次
         if not self.index:
-            return type('obj', (object,), {'response_gen': iter(["抱歉，RAG 索引构建失败或暂无数据，请稍后再试。"])})
+            logger.info("索引为空，触发首次加载...")
+            self.refresh_index()
+            
+        # 如果还是空（可能数据库没数据），直接返回
+        if not self.index:
+            return type('obj', (object,), {'response_gen': iter(["抱歉，RAG 暂无资讯数据可供参考。"])})
+
+        # 检查是否需要后台更新（超过1小时）
+        if (datetime.datetime.now() - self.last_update).total_seconds() > 3600:
+            logger.info("索引已过期，将在下一次请求或后台刷新...")
+            # 此处可以考虑异步刷新，暂保持同步
+            self.refresh_index()
         
         # 启用流式查询
         query_engine = self.index.as_query_engine(
@@ -117,6 +136,20 @@ app = FastAPI(title="GDELT RAG Service")
 
 class QueryRequest(BaseModel):
     prompt: str
+
+@app.get("/health")
+async def health():
+    return {
+        "status": "ok",
+        "index_ready": rag_core.index is not None,
+        "last_update": str(rag_core.last_update) if rag_core.last_update else None
+    }
+
+@app.on_event("startup")
+async def startup_event():
+    # 启动时异步触发一次索引构建，避免阻塞
+    import threading
+    threading.Thread(target=rag_core.refresh_index).start()
 
 @app.post("/query")
 async def query(request: QueryRequest):
