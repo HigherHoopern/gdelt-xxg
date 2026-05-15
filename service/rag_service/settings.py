@@ -29,7 +29,8 @@ def cast_to_none_or_int(value):
 DEBUG = config('DEBUG', default=False, cast=bool)
 
 # RAG 核心参数
-LLM_PROVIDER = config("LLM_PROVIDER", default='siliconflow')
+# 针对 RAG 使用专门的 Provider 变量，避免与翻译用的 OLLAMA 冲突
+LLM_PROVIDER = config("RAG_LLM_PROVIDER", default='siliconflow')
 CHUNK_SIZE = config("CHUNK_SIZE", default=1024, cast=int)
 VEC_STORE = config("VEC_STORE", default="milvus") 
 STREAM = config("STREAM", default=True, cast=bool) 
