@@ -229,9 +229,9 @@ FIPS_TO_ECHART_NAME = {
 def render_map(country_name="全部", continent_name="全部"):
     raw_df = fetch_history_data_unified()
     
-    # 统一使用与数据对齐的 8 小时偏移逻辑构造日期轴
+    # 性能优化：将时间轴缩短至 14 天，大幅减少 HTML 体积，防止浏览器卡死
     now_local = datetime.datetime.now() + datetime.timedelta(hours=8)
-    all_dates = [(now_local - datetime.timedelta(days=i)).strftime('%Y-%m-%d') for i in range(31)]
+    all_dates = [(now_local - datetime.timedelta(days=i)).strftime('%Y-%m-%d') for i in range(14)]
     all_dates = sorted(list(set(all_dates)))
     
     if raw_df.empty: return "<div style='height:850px; display:flex; align-items:center; justify-content:center;'>暂无风险数据</div>"
@@ -248,7 +248,6 @@ def render_map(country_name="全部", continent_name="全部"):
                 map_data.append((echart_name, round(float(row['risk_index']), 2)))
         
         m = Map()
-        # 确保 map_data 永远不为空，避开 pyecharts 内部对 data_pair[0] 的访问导致的 IndexError
         safe_map_data = map_data if map_data else [("China", None)]
         
         m.add(
@@ -271,7 +270,7 @@ def render_map(country_name="全部", continent_name="全部"):
         )
         timeline.add(m, date_str)
         
-    timeline.add_schema(is_auto_play=True, play_interval=1000, pos_bottom="20px")
+    timeline.add_schema(is_auto_play=True, play_interval=1500, pos_bottom="20px")
     return wrap_in_iframe(timeline, height="850px")
 
 def render_line(country_name="全部", continent_name="全部"):
@@ -459,10 +458,9 @@ def update_news(country_name="全部", continent_name="全部", search_keyword="
 
 def update_visualizations(country_name, continent_name):
     logger.info(f"📊 更新图表可视化: {country_name}, {continent_name}")
-    fig_map_html = render_map(country_name, continent_name)
     line_html = render_line(country_name, continent_name)
     predict_html = render_prediction_chart(country_name, continent_name)
-    return fig_map_html, predict_html, line_html
+    return predict_html, line_html
 
 def generate_report(country_name):
     if country_name == "全部": yield "请先选择具体国家。"
@@ -482,19 +480,20 @@ with gr.Blocks(title="全球地缘政治风险分析平台") as demo:
             country_selector = gr.Dropdown(choices=get_dynamic_country_choices(), value="全部", label="🌐 国家筛选")
 
     with gr.Tabs() as tabs:
-        with gr.TabItem("🗺️ 风险动态地图", id="map_tab"):
-            map_plot = gr.HTML()
+        with gr.TabItem("🗺️ 风险动态地图", id="map_tab") as tab_map:
+            map_plot = gr.HTML("<div style='height:850px; display:flex; align-items:center; justify-content:center;'>正在准备地图数据...</div>")
         
-        with gr.TabItem("📈 风险分析与预测", id="analysis_tab"):
-            predict_plot = gr.HTML()
-            trend_box = gr.HTML()
+        with gr.TabItem("📈 风险分析与预测", id="analysis_tab") as tab_analysis:
+            predict_plot = gr.HTML("<div style='height:500px; display:flex; align-items:center; justify-content:center;'>点击标签页加载预测数据...</div>")
+            trend_box = gr.HTML("<div style='height:500px; display:flex; align-items:center; justify-content:center;'>点击标签页加载历史趋势...</div>")
 
-        with gr.TabItem("📰 实时新闻", id="news_tab"):
+        with gr.TabItem("📰 实时新闻", id="news_tab") as tab_news:
             with gr.Row():
                 search_input = gr.Textbox(label="🔍 关键词搜索", placeholder="输入关键词...")
                 start_date_input = gr.DateTime(label="📅 开始日期", type="datetime")
                 end_date_input = gr.DateTime(label="📅 结束日期", type="datetime")
-            news_html_box = gr.HTML()
+            search_btn = gr.Button("立即搜索/筛选", variant="secondary")
+            news_html_box = gr.HTML("<div style='height:500px; display:flex; align-items:center; justify-content:center;'>正在同步最新资讯...</div>")
 
         with gr.TabItem("🤖 AI 研判报告", id="report_tab"):
             with gr.Column(elem_id="ai-report-container"):
@@ -510,39 +509,30 @@ with gr.Blocks(title="全球地缘政治风险分析平台") as demo:
 
     continent_selector.change(on_continent_change, inputs=[continent_selector], outputs=[country_selector])
 
-    # 核心优化：按需刷新逻辑
-    # 1. 只有地图 Tab 选中时刷新地图
-    # 2. 只有分析 Tab 选中时刷新预测和趋势图
-    # 3. 只有新闻 Tab 选中时刷新新闻列表
+    # --- 核心性能优化逻辑：真·懒加载 ---
     
     vis_inputs = [country_selector, continent_selector]
     news_inputs = [country_selector, continent_selector, search_input, start_date_input, end_date_input]
 
-    # 初始化加载
+    # 1. 只有点击对应的 Tab 才会触发该 Tab 的重渲染
+    tab_map.select(render_map, inputs=vis_inputs, outputs=map_plot)
+    tab_analysis.select(update_visualizations, inputs=vis_inputs, outputs=[predict_plot, trend_box])
+    tab_news.select(update_news, inputs=news_inputs, outputs=news_html_box)
+
+    # 2. 初始加载：只加载第一个 Tab（地图）和新闻（可选，这里只加载地图）
     demo.load(render_map, inputs=vis_inputs, outputs=map_plot)
-    demo.load(render_prediction_chart, inputs=vis_inputs, outputs=predict_plot)
-    demo.load(render_line, inputs=vis_inputs, outputs=trend_box)
-    demo.load(update_news, inputs=news_inputs, outputs=news_html_box)
-
-    # 联动更新 (仅更新当前可能可见的内容)
-    # 地图和分析图表共享输入
-    country_selector.change(render_map, inputs=vis_inputs, outputs=map_plot)
-    country_selector.change(render_prediction_chart, inputs=vis_inputs, outputs=predict_plot)
-    country_selector.change(render_line, inputs=vis_inputs, outputs=trend_box)
-    country_selector.change(update_news, inputs=news_inputs, outputs=news_html_box)
-
-    continent_selector.change(render_map, inputs=vis_inputs, outputs=map_plot)
-    continent_selector.change(render_prediction_chart, inputs=vis_inputs, outputs=predict_plot)
-    continent_selector.change(render_line, inputs=vis_inputs, outputs=trend_box)
-    continent_selector.change(update_news, inputs=news_inputs, outputs=news_html_box)
-
-    # 新闻专属更新
-    search_input.submit(update_news, inputs=news_inputs, outputs=news_html_box)
-    start_date_input.change(update_news, inputs=news_inputs, outputs=news_html_box)
-    end_date_input.change(update_news, inputs=news_inputs, outputs=news_html_box)
     
-    # 计时器仅刷新新闻（相对轻量）
-    gr.Timer(60).tick(update_news, inputs=news_inputs, outputs=news_html_box)
+    # 3. 筛选器变动时，不立即更新所有 Tab，只更新当前可能激活的内容
+    # 为了简化，我们让筛选器只更新地图；如果用户在其他 Tab 筛选，通过 Tab 的 select 事件实现更新
+    country_selector.change(render_map, inputs=vis_inputs, outputs=map_plot)
+    continent_selector.change(render_map, inputs=vis_inputs, outputs=map_plot)
+    
+    # 4. 新闻搜索改为手动触发，避免频繁输入导致的卡顿
+    search_btn.click(update_news, inputs=news_inputs, outputs=news_html_box)
+    search_input.submit(update_news, inputs=news_inputs, outputs=news_html_box)
+    
+    # 5. 定时器：仅在后台低频更新新闻数据（不自动刷地图，减少压力）
+    gr.Timer(120).tick(update_news, inputs=news_inputs, outputs=news_html_box)
     
     report_btn.click(generate_report, inputs=[country_selector], outputs=[report_box])
 
