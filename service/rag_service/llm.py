@@ -9,13 +9,13 @@ try:
     from .settings import (
         LLM_PROVIDER, llm_model_name, llm_base_url, llm_api_key,
         embed_model_name, embed_base_url, embed_api_key,
-        reranker_name, reranker_base_url, TOP_K, num_output
+        reranker_name, reranker_base_url, reranker_api_key, TOP_K, num_output
     )
 except (ImportError, ValueError):
     from settings import (
         LLM_PROVIDER, llm_model_name, llm_base_url, llm_api_key,
         embed_model_name, embed_base_url, embed_api_key,
-        reranker_name, reranker_base_url, TOP_K, num_output
+        reranker_name, reranker_base_url, reranker_api_key, TOP_K, num_output
     )
 
 # 设置全局输出限制
@@ -30,10 +30,8 @@ def config_llm():
     logging.info(f"--- 正在配置模型，使用的提供商: {provider} ---")
     logging.info(f"LLM 模型: {llm_model_name} @ {llm_base_url}")
     logging.info(f"Embedding 模型: {embed_model_name}")
-    logging.info(f"Reranker 模型: {reranker_name}")
     
     # 1. 初始化 LLM (通用 OpenAILike 适配)
-    # 注意：SiliconFlow 和 Xinference 都兼容 OpenAI 协议
     llm = OpenAILike(
         model=llm_model_name,
         api_key=llm_api_key, 
@@ -45,7 +43,26 @@ def config_llm():
     )
 
     # 2. 根据 Provider 初始化 Embedding 和 Reranker
-    if provider == 'xinf':
+    if provider == "siliconflow":
+        # 性能与稳定性优化：SiliconFlow 的 Embedding 和 Reranker 都完美兼容 OpenAI 协议
+        # 直接使用 OpenAILikeEmbedding 比专门的 wrapper 更健壮，不容易报错
+        from llama_index.embeddings.openai_like import OpenAILikeEmbedding
+        from llama_index.postprocessor.siliconflow_rerank import SiliconFlowRerank
+        
+        emb = OpenAILikeEmbedding(
+            model_name=embed_model_name,
+            api_base=embed_base_url,
+            api_key=embed_api_key,
+        )
+
+        reranker = SiliconFlowRerank(
+            model=reranker_name,
+            api_key=reranker_api_key,
+            top_n=TOP_K,
+        )
+    
+    elif provider == 'xinf':
+        from llama_index.embeddings.openai_like import OpenAILikeEmbedding
         emb = OpenAILikeEmbedding(
             model_name=embed_model_name,
             api_base=embed_base_url,
@@ -58,6 +75,7 @@ def config_llm():
         )
 
     elif provider == "openai-like":
+        from llama_index.embeddings.openai_like import OpenAILikeEmbedding
         emb = OpenAILikeEmbedding(
             model_name=embed_model_name,
             api_base=embed_base_url,
@@ -65,25 +83,8 @@ def config_llm():
         )
         reranker = None
 
-    elif provider == "siliconflow":
-        # 动态导入 SiliconFlow 专有组件
-        from llama_index.embeddings.siliconflow import SiliconFlowEmbedding
-        from llama_index.postprocessor.siliconflow_rerank import SiliconFlowRerank
-        
-        # 使用 settings 中的配置，不再硬编码
-        emb = SiliconFlowEmbedding(
-            model=embed_model_name,
-            api_key=embed_api_key,
-        )
-
-        reranker = SiliconFlowRerank(
-            model=reranker_name,
-            api_key=embed_api_key, # 通常 Embedding 和 Rerank 共用 key
-            top_n=TOP_K,
-        )
-
     else:
-        raise ValueError(f"不支持的 provider: '{provider}'。请检查 .env 中的 LLM_PROVIDER 设置。")
+        raise ValueError(f"不支持的 provider: '{provider}'。请检查 .env 中的 RAG_LLM_PROVIDER 设置。")
     
     return llm, emb, reranker
 

@@ -68,9 +68,14 @@ try:
     llm_base_url = config("LLM_BASE_URL", default="https://api.siliconflow.cn/v1")
 
     # 强制逻辑：如果环境变量为空或为 EMPTY，则回退到 SiliconFlow Key
-    llm_api_key = config("LLM_API_KEY", default=SILICONFLOW_KEY).strip()
-    if not llm_api_key or llm_api_key == "EMPTY":
-        llm_api_key = SILICONFLOW_KEY
+    # 彻底杜绝引号干扰：直接替换掉所有引号
+    def clean_key(v):
+        if not v or v == "EMPTY": return SILICONFLOW_KEY
+        return str(v).strip().replace('"', '').replace("'", "")
+
+    llm_api_key = clean_key(config("LLM_API_KEY", default=SILICONFLOW_KEY))
+    embed_api_key = clean_key(config('EMBED_API_KEY', default=SILICONFLOW_KEY))
+    reranker_api_key = clean_key(config('RERANKER_API_KEY', default=SILICONFLOW_KEY))
 
     context_window_size = config("CONTEXT_WINDOW_SIZE", default=32768, cast=int)
     num_output = config("NUM_OUTPUT", default=2048, cast=int)
@@ -81,24 +86,15 @@ try:
     embed_model_name = config('EMBED_MODEL_NAME', default="BAAI/bge-m3")
     embed_base_url = config('EMBED_BASE_URL', default="https://api.siliconflow.cn/v1")
 
-    embed_api_key = config('EMBED_API_KEY', default=SILICONFLOW_KEY).strip()
-    if not embed_api_key or embed_api_key == "EMPTY":
-        embed_api_key = SILICONFLOW_KEY
-
     # =============================================================================
     # Reranker (重排序模型) 配置
     # =============================================================================
     reranker_name = config('RERANKER_NAME', default='BAAI/bge-reranker-v2-m3')
     reranker_base_url = config('RERANKER_BASE_URL', default='https://api.siliconflow.cn/v1')
 
-    reranker_api_key = config('RERANKER_API_KEY', default=SILICONFLOW_KEY).strip()
-    if not reranker_api_key or reranker_api_key == "EMPTY":
-        reranker_api_key = SILICONFLOW_KEY
-
     # 打印掩码后的 Key 以供调试
-    print(f"--- [RAG Config] LLM Key: {llm_api_key[:6]}...{llm_api_key[-4:]} ---")
-    print(f"--- [RAG Config] Embed Key: {embed_api_key[:6]}...{embed_api_key[-4:]} ---")
-
+    print(f"--- [RAG Config] LLM Key: {llm_api_key[:6]}...{llm_api_key[-4:]} (len: {len(llm_api_key)}) ---")
+    print(f"--- [RAG Config] Embed Key: {embed_api_key[:6]}...{embed_api_key[-4:]} (len: {len(embed_api_key)}) ---")
     
     # =============================================================================
     # Redis 配置 (修改默认值为 localhost)
