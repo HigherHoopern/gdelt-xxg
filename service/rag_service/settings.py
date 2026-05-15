@@ -81,6 +81,8 @@ try:
     # =============================================================================
     reranker_name = config('RERANKER_NAME', default='BAAI/bge-reranker-v2-m3')
     reranker_base_url = config('RERANKER_BASE_URL', default='https://api.siliconflow.cn/v1')
+    # 针对 SiliconFlow 的 Reranker 同样需要 api_key，虽然在 llm.py 中处理，但这里先统一配置变量名
+    reranker_api_key = config('RERANKER_API_KEY', default="sk-nvfzirhgdkcpgmxhzrtpxcywpmlyrsrjhycowlirtfxjtokd")
     
     # =============================================================================
     # Redis 配置 (修改默认值为 localhost)
