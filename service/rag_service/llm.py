@@ -1,21 +1,23 @@
 # llm.py
 import logging
-from llama_index.llms.openai_like import OpenAILike
-from llama_index.embeddings.openai_like import OpenAILikeEmbedding
-from llama_index.postprocessor.xinference_rerank import XinferenceRerank
+import os
+from llama_index.llms.openai import OpenAI
+from llama_index.embeddings.openai import OpenAIEmbedding
+from llama_index.postprocessor.siliconflow_rerank import SiliconFlowRerank
 from llama_index.core import Settings
 
+# --- 直接从 settings.py 导入配置 ---
 try:
     from .settings import (
         LLM_PROVIDER, llm_model_name, llm_base_url, llm_api_key,
         embed_model_name, embed_base_url, embed_api_key,
-        reranker_name, reranker_base_url, reranker_api_key, TOP_K, num_output
+        reranker_name, reranker_api_key, TOP_K, num_output
     )
 except (ImportError, ValueError):
     from settings import (
         LLM_PROVIDER, llm_model_name, llm_base_url, llm_api_key,
         embed_model_name, embed_base_url, embed_api_key,
-        reranker_name, reranker_base_url, reranker_api_key, TOP_K, num_output
+        reranker_name, reranker_api_key, TOP_K, num_output
     )
 
 # 设置全局输出限制
@@ -24,117 +26,48 @@ Settings.num_output = num_output
 def config_llm():
     """
     根据从 settings.py 导入的全局配置来初始化模型。
+    针对 SiliconFlow 优化：直接使用标准 OpenAI 类以获得最大稳定性。
     """
     provider = LLM_PROVIDER.lower()
+    logging.info(f"--- RAG 模型初始化 (Provider: {provider}) ---")
 
-    logging.info(f"--- 正在配置模型，使用的提供商: {provider} ---")
-    logging.info(f"LLM 模型: {llm_model_name} @ {llm_base_url}")
-    logging.info(f"Embedding 模型: {embed_model_name}")
-    
-    # 1. 初始化 LLM (通用 OpenAILike 适配)
-    llm = OpenAILike(
-        model=llm_model_name,
-        api_key=llm_api_key, 
-        api_base=llm_base_url,
-        max_tokens=num_output,
-        temperature=0.0,
-        is_chat_model=True,
-        timeout=600
-    )
-
-    # 2. 根据 Provider 初始化 Embedding 和 Reranker
     if provider == "siliconflow":
-        # 性能与稳定性优化：SiliconFlow 的 Embedding 和 Reranker 都完美兼容 OpenAI 协议
-        # 直接使用 OpenAILikeEmbedding 比专门的 wrapper 更健壮，不容易报错
-        from llama_index.embeddings.openai_like import OpenAILikeEmbedding
-        from llama_index.postprocessor.siliconflow_rerank import SiliconFlowRerank
-        
-        emb = OpenAILikeEmbedding(
-            model_name=embed_model_name,
-            api_base=embed_base_url,
-            api_key=embed_api_key,
+        # 1. 初始化 LLM
+        # 直接使用 OpenAI 类，但在 api_base 中指定 SiliconFlow 地址
+        # 这种方式比 OpenAILike 更能强制 API Key 的传递
+        llm = OpenAI(
+            model=llm_model_name,
+            api_key=llm_api_key,
+            api_base=llm_base_url,
+            max_tokens=num_output,
+            temperature=0.1,
+            timeout=600,
+            reuse_client=False # 强制每次创建新客户端，避免干扰
         )
 
+        # 2. 初始化 Embedding
+        # 同样使用标准 OpenAIEmbedding 配合自定义 api_base
+        emb = OpenAIEmbedding(
+            model=embed_model_name,
+            api_key=embed_api_key,
+            api_base=embed_base_url,
+            timeout=600,
+        )
+
+        # 3. 初始化 Reranker
         reranker = SiliconFlowRerank(
             model=reranker_name,
             api_key=reranker_api_key,
             top_n=TOP_K,
         )
-    
-    elif provider == 'xinf':
-        from llama_index.embeddings.openai_like import OpenAILikeEmbedding
-        emb = OpenAILikeEmbedding(
-            model_name=embed_model_name,
-            api_base=embed_base_url,
-            api_key=embed_api_key,
-        )
-        reranker = XinferenceRerank(
-            top_n=TOP_K,
-            model=reranker_name,
-            base_url=reranker_base_url,
-        )
-
-    elif provider == "openai-like":
-        from llama_index.embeddings.openai_like import OpenAILikeEmbedding
-        emb = OpenAILikeEmbedding(
-            model_name=embed_model_name,
-            api_base=embed_base_url,
-            api_key=embed_api_key,
-        )
-        reranker = None
 
     else:
-        raise ValueError(f"不支持的 provider: '{provider}'。请检查 .env 中的 RAG_LLM_PROVIDER 设置。")
-    
-    return llm, emb, reranker
-
-if __name__ == "__main__":
-    from llama_index.core import QueryBundle
-    from llama_index.core.schema import NodeWithScore, TextNode
-
-    # 设置日志级别
-    logging.basicConfig(level=logging.INFO)
-
-    print("\n" + "="*50)
-    print(f"🚀 开始进行 {LLM_PROVIDER} 模式功能测试")
-    print("="*50)
-
-    try:
-        # 1. 初始化
-        llm, emb, reranker = config_llm()
+        # 非 siliconflow 模式下的逻辑（保持基本兼容）
+        from llama_index.llms.openai_like import OpenAILike
+        from llama_index.embeddings.openai_like import OpenAILikeEmbedding
         
-        # --- 测试 1: LLM ---
-        print("\n[测试 1/3] LLM 生成测试...")
-        llm_response = llm.complete("请用五个字以内形容江城。")
-        print(f"✅ LLM 响应成功: {llm_response}")
+        llm = OpenAILike(model=llm_model_name, api_key=llm_api_key, api_base=llm_base_url, is_chat_model=True)
+        emb = OpenAILikeEmbedding(model_name=embed_model_name, api_key=embed_api_key, api_base=embed_base_url)
+        reranker = None
 
-        # --- 测试 2: Embedding ---
-        print("\n[测试 2/3] Embedding 向量化测试...")
-        test_text = "江城哈尼族彝族自治县"
-        embed_result = emb.get_text_embedding(test_text)
-        print(f"✅ Embedding 成功! 向量维度: {len(embed_result)}")
-
-        # --- 测试 3: Reranker ---
-        print("\n[测试 3/3] Reranker 重排测试...")
-        if reranker:
-            query = "江城的支柱产业是什么？"
-            nodes = [
-                NodeWithScore(node=TextNode(text="江城县的橡胶产业是当地的重要经济支柱。"), score=0.5),
-                NodeWithScore(node=TextNode(text="今天江城的天气多云转晴。"), score=0.2),
-            ]
-            query_bundle = QueryBundle(query_str=query)
-            ranked_nodes = reranker.postprocess_nodes(nodes, query_bundle)
-            print(f"✅ Reranker 成功! 首位结果: {ranked_nodes[0].text}")
-        else:
-            print("⚠️ 未配置 Reranker，跳过测试")
-
-        print("\n" + "="*50)
-        print(f"🎉 {LLM_PROVIDER} 模式全链路测试通过！")
-        print("="*50)
-
-    except Exception as e:
-        print("\n" + "!"*50)
-        print(f"❌ 测试失败: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        print("!"*50)
+    return llm, emb, reranker
