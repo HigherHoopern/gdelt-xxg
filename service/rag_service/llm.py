@@ -22,14 +22,13 @@ Settings.num_output = num_output
 
 def config_llm():
     """
-    根据从 settings.py 导入的全局配置来初始化模型。
-    全量使用 LlamaIndex + SiliconFlow 原生接口类。
+    全量使用 SiliconFlow 原生接口类。
     """
     provider = LLM_PROVIDER.lower()
     logging.info(f"--- RAG 模型初始化 (Provider: {provider}) ---")
 
     if provider == "siliconflow":
-        # 1. 初始化 LLM (使用 SiliconFlow 专属类)
+        # 1. 初始化 LLM
         from llama_index.llms.siliconflow import SiliconFlow
         llm = SiliconFlow(
             model=llm_model_name,
@@ -39,14 +38,16 @@ def config_llm():
             timeout=600,
         )
 
-        # 2. 初始化 Embedding (使用 SiliconFlow 专属类)
+        # 2. 初始化 Embedding
         from llama_index.embeddings.siliconflow import SiliconFlowEmbedding
         emb = SiliconFlowEmbedding(
             model_name=embed_model_name,
             api_key=embed_api_key,
+            # 即使 SF SDK 内部可能有默认值，我们也显式注入环境变量确保万无一失
         )
+        os.environ["SILICONFLOW_API_KEY"] = embed_api_key
 
-        # 3. 初始化 Reranker (使用 SiliconFlow 专属类)
+        # 3. 初始化 Reranker
         from llama_index.postprocessor.siliconflow_rerank import SiliconFlowRerank
         reranker = SiliconFlowRerank(
             model=reranker_name,
@@ -55,10 +56,9 @@ def config_llm():
         )
 
     else:
-        # 非 siliconflow 模式下的逻辑
+        # 通用 fallback
         from llama_index.llms.openai_like import OpenAILike
         from llama_index.embeddings.openai_like import OpenAILikeEmbedding
-        
         llm = OpenAILike(model=llm_model_name, api_key=llm_api_key, api_base=llm_base_url, is_chat_model=True)
         emb = OpenAILikeEmbedding(model_name=embed_model_name, api_key=embed_api_key, api_base=embed_base_url)
         reranker = None

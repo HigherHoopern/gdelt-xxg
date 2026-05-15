@@ -3,17 +3,25 @@ import os
 from decouple import Config, RepositoryEnv
 
 # =============================================================================
-# 0. 基础路径与环境清理
+# 0. 全局变量注入 (最优先级修复)
 # =============================================================================
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-ENV_PATH = os.path.join(BASE_DIR, '.env')
+# 用户提供的有效 SiliconFlow 密钥
+SF_KEY = "sk-nvfzirhgdkcpgmxhzrtpxcywpmlyrsrjhycowlirtfxjtokd"
 
-# 关键修复：清除可能导致干扰的全局环境变量
-# 如果这些变量存在且指向 ollama，会导致 OpenAI 客户端报错 401
+# 强制注入到 os.environ，确保所有 SDK 都能默认读取到
+# 这能解决部分 SDK 内部忽略显式传递的 api_key 而去读环境变量的问题
+os.environ["SILICONFLOW_API_KEY"] = SF_KEY
+# 同时清除可能导致干扰的全局 OpenAI 变量
 INTERFERING_VARS = ['OPENAI_API_KEY', 'OPENAI_API_BASE', 'LLM_API_KEY', 'LLM_BASE_URL']
 for var in INTERFERING_VARS:
     if var in os.environ:
         os.environ.pop(var)
+
+# =============================================================================
+# 1. 配置加载
+# =============================================================================
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+ENV_PATH = os.path.join(BASE_DIR, '.env')
 
 if os.path.exists(ENV_PATH):
     config = Config(RepositoryEnv(ENV_PATH))
@@ -22,18 +30,11 @@ else:
     from decouple import config
     print("--- [RAG System] 未找到 .env，使用默认硬编码配置 ---")
 
-# =============================================================================
-# RAG 专用模型配置 (强制使用 SiliconFlow)
-# =============================================================================
-
-# 1. 用户提供的 SiliconFlow 密钥 (这是唯一真理)
-SF_KEY = "sk-nvfzirhgdkcpgmxhzrtpxcywpmlyrsrjhycowlirtfxjtokd"
-
 def force_clean_key(v):
-    """极致清洗：去空格、去引号、如果是占位符则返回 SF_KEY"""
+    """极致清洗：去空格、去引号、去回车"""
     if not v or str(v).strip() in ["", "EMPTY", "None", "none", "ollama"]: 
         return SF_KEY
-    return str(v).strip().strip('"').strip("'")
+    return str(v).strip().strip('"').strip("'").replace('\n', '').replace('\r', '')
 
 # RAG 专用 Provider
 LLM_PROVIDER = config("RAG_LLM_PROVIDER", default='siliconflow')
@@ -58,9 +59,9 @@ TOP_K = config("TOP_K", default=5, cast=int)
 CHUNK_SIZE = config("CHUNK_SIZE", default=1024, cast=int)
 num_output = config("NUM_OUTPUT", default=2048, cast=int)
 
-# 打印调试信息（启动容器时务必查看 docker logs）
+# 打印调试信息
 print(f"--- [RAG DEBUG START] ---")
 print(f"PROVIDER: {LLM_PROVIDER}")
-print(f"LLM: {llm_model_name} | URL: {llm_base_url} | KEY: {llm_api_key[:10]}...{llm_api_key[-5:]}")
-print(f"EMBED: {embed_model_name} | URL: {embed_base_url} | KEY: {embed_api_key[:10]}...{embed_api_key[-5:]}")
+print(f"LLM: {llm_model_name} | KEY: {llm_api_key[:10]}...{llm_api_key[-5:]} (LEN: {len(llm_api_key)})")
+print(f"EMBED: {embed_model_name} | KEY: {embed_api_key[:10]}...{embed_api_key[-5:]} (LEN: {len(embed_api_key)})")
 print(f"--- [RAG DEBUG END] ---")
