@@ -22,17 +22,22 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("RAGService")
 
 # =============================================================================
-# 1. 核心配置 (从环境变量读取，默认为 SiliconFlow)
+# 1. 核心配置 (从环境变量读取，优先适配 Docker 环境)
 # =============================================================================
 SF_KEY = os.getenv("RAG_LLM_API_KEY", "sk-nvfzirhgdkcpgmxhzrtpxcywpmlyrsrjhycowlirtfxjtokd")
 LLM_MODEL = os.getenv("RAG_LLM_MODEL_NAME", "deepseek-ai/DeepSeek-V3")
 EMBED_MODEL = os.getenv("RAG_EMBED_MODEL_NAME", "BAAI/bge-m3")
 RERANKER_MODEL = os.getenv("RAG_RERANKER_NAME", "BAAI/bge-reranker-v2-m3")
-DB_URL = os.getenv("DB_URL", "postgresql+psycopg2://zhenxian:15821828225Lzx!@global_db/dgelt")
+
+# 核心修复：DB_URL 必须指向 global_db 容器名，而不是 127.0.0.1
+DEFAULT_DB_URL = "postgresql+psycopg2://zhenxian:15821828225Lzx!@global_db/dgelt"
+DB_URL = os.getenv("DB_URL", DEFAULT_DB_URL)
 
 class RAGCore:
     def __init__(self):
         logger.info(f"🚀 初始化 RAG 引擎: {LLM_MODEL}")
+        logger.info(f"🔗 正在连接数据库: {DB_URL.split('@')[-1]}") # 掩码打印 DB 地址
+        
         self.llm = SiliconFlow(model=LLM_MODEL, api_key=SF_KEY, max_tokens=2048)
         self.embed_model = SiliconFlowEmbedding(model_name=EMBED_MODEL, api_key=SF_KEY)
         self.reranker = SiliconFlowRerank(model=RERANKER_MODEL, api_key=SF_KEY, top_n=5)
@@ -46,8 +51,10 @@ class RAGCore:
 
     def fetch_data(self):
         since_date = datetime.datetime.now() - datetime.timedelta(days=7)
-        query = "SELECT title_zh, summary_zh, event_date, country_code FROM risk_analysis_data WHERE event_date >= %s AND title_zh != ''"
-        return pd.read_sql(query, self.engine, params=(since_date,))
+        # 使用 SQLAlchemy text 对象以获得更好的兼容性
+        query = text("SELECT title_zh, summary_zh, event_date, country_code FROM risk_analysis_data WHERE event_date >= :since AND title_zh != ''")
+        with self.engine.connect() as conn:
+            return pd.read_sql(query, conn, params={"since": since_date})
 
     def refresh_index(self):
         df = self.fetch_data()
