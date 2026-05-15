@@ -46,6 +46,8 @@ services:
       global_db:
         condition: service_healthy
     env_file: .env
+    environment:
+      - "DB_URL=postgresql+psycopg2://zhenxian:15821828225Lzx!@global_db/dgelt"
     command: python3 service/rag_service/api_server.py
     volumes:
       - .:/app
