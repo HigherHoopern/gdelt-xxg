@@ -15,8 +15,11 @@ from llama_index.llms.siliconflow import SiliconFlow
 from llama_index.embeddings.siliconflow import SiliconFlowEmbedding
 from llama_index.postprocessor.siliconflow_rerank import SiliconFlowRerank
 
-# 导入独立配置
-from config import SILICONFLOW_API_KEY, RAG_LLM_MODEL, RAG_EMBED_MODEL, RAG_RERANKER_MODEL, SF_BASE_URL, RAG_DB_URL
+# 关键修复：显式使用绝对导入新的配置名
+try:
+    from rag_settings import SILICONFLOW_API_KEY, RAG_LLM_MODEL, RAG_EMBED_MODEL, RAG_RERANKER_MODEL, SF_BASE_URL, RAG_DB_URL
+except ImportError:
+    from service.rag_service.rag_settings import SILICONFLOW_API_KEY, RAG_LLM_MODEL, RAG_EMBED_MODEL, RAG_RERANKER_MODEL, SF_BASE_URL, RAG_DB_URL
 
 # 配置日志
 logging.basicConfig(level=logging.INFO)
@@ -24,17 +27,25 @@ logger = logging.getLogger("RAGService")
 
 class RAGCore:
     def __init__(self):
-        logger.info(f"--- [RAG CORE STARTUP] ---")
+        # 性能与安全性清洗
+        self.clean_key = str(SILICONFLOW_API_KEY).strip().strip('"').strip("'").replace('\n', '').replace('\r', '')
         
-        # 强制设置环境变量以防 SDK 默认读取
-        os.environ["SILICONFLOW_API_KEY"] = SILICONFLOW_API_KEY
+        logger.info(f"--- [RAG STARTUP DIAGNOSTIC] ---")
+        logger.info(f"Key Fingerprint: {self.clean_key[:7]}...{self.clean_key[-4:]}")
+        logger.info(f"Key Length: {len(self.clean_key)}")
         
-        # 预检：直接测试 API
+        if len(self.clean_key) < 51:
+            logger.warning("⚠️ 警告：检测到 API Key 长度异常（通常应为 51-52 位），请核对复制是否完整。")
+
+        # 强制设置环境变量以防 SDK 内部逻辑绕过显式传递
+        os.environ["SILICONFLOW_API_KEY"] = self.clean_key
+        
+        # 预检
         self.test_raw_api()
 
-        self.llm = SiliconFlow(model=RAG_LLM_MODEL, api_key=SILICONFLOW_API_KEY, max_tokens=2048)
-        self.embed_model = SiliconFlowEmbedding(model_name=RAG_EMBED_MODEL, api_key=SILICONFLOW_API_KEY)
-        self.reranker = SiliconFlowRerank(model=RAG_RERANKER_MODEL, api_key=SILICONFLOW_API_KEY, top_n=5)
+        self.llm = SiliconFlow(model=RAG_LLM_MODEL, api_key=self.clean_key, max_tokens=2048)
+        self.embed_model = SiliconFlowEmbedding(model_name=RAG_EMBED_MODEL, api_key=self.clean_key)
+        self.reranker = SiliconFlowRerank(model=RAG_RERANKER_MODEL, api_key=self.clean_key, top_n=5)
         
         Settings.llm = self.llm
         Settings.embed_model = self.embed_model
@@ -48,17 +59,14 @@ class RAGCore:
         import requests
         try:
             test_url = f"{SF_BASE_URL}/user/info"
-            headers = {"Authorization": f"Bearer {SILICONFLOW_API_KEY}"}
+            headers = {"Authorization": f"Bearer {self.clean_key}"}
             resp = requests.get(test_url, headers=headers, timeout=10)
             if resp.status_code == 200:
-                logger.info("✅ SiliconFlow API 鉴权测试成功！")
+                logger.info("✅ SiliconFlow 原生鉴权测试成功！")
             else:
-                # 打印详细指纹以供对比
-                logger.error(f"❌ SiliconFlow API 鉴权失败！响应: {resp.text}")
-                logger.error(f"当前使用的 Key 指纹: {SILICONFLOW_API_KEY[:6]}...{SILICONFLOW_API_KEY[-4:]} | 长度: {len(SILICONFLOW_API_KEY)}")
-                logger.error("请检查您在 service/rag_service/config.py 中填写的 Key 是否完整（通常为 52 位）。")
+                logger.error(f"❌ SiliconFlow 原生鉴权失败！状态码: {resp.status_code} | 响应: {resp.text}")
         except Exception as e:
-            logger.error(f"⚠️ 无法连接预检: {e}")
+            logger.error(f"⚠️ 预检连接超时: {e}")
 
     def fetch_data(self):
         since_date = datetime.datetime.now() - datetime.timedelta(days=7)
@@ -68,7 +76,9 @@ class RAGCore:
 
     def refresh_index(self):
         df = self.fetch_data()
-        if df.empty: return False
+        if df.empty: 
+            logger.warning("数据库中暂无过去7天的新闻。")
+            return False
         docs = [Document(text=f"日期:{r['event_date']} 国家:{r['country_code']} 标题:{r['title_zh']} 内容:{r['summary_zh']}") for _, r in df.iterrows()]
         self.index = VectorStoreIndex.from_documents(docs)
         self.last_update = datetime.datetime.now()
@@ -78,6 +88,9 @@ class RAGCore:
     def query_stream(self, prompt: str):
         if not self.index or (datetime.datetime.now() - self.last_update).total_seconds() > 3600:
             self.refresh_index()
+        if not self.index:
+            return type('obj', (object,), {'response_gen': iter(["目前没有足够的新闻数据来回答该问题。"])})
+        
         query_engine = self.index.as_query_engine(similarity_top_k=10, node_postprocessors=[self.reranker], streaming=True)
         return query_engine.query(f"基于过去7天新闻回答：{prompt}")
 
@@ -97,6 +110,10 @@ async def query(request: QueryRequest):
         return StreamingResponse(event_generator(), media_type="text/plain")
     except Exception as e:
         logger.error(f"查询失败: {e}")
+        # 如果是 Api key is invalid，直接返回这个具体的错误
+        err_msg = str(e)
+        if "Api key is invalid" in err_msg:
+            return StreamingResponse(iter(["[错误] SiliconFlow API Key 校验失败，请检查 RAG 服务配置。"]), media_type="text/plain")
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
