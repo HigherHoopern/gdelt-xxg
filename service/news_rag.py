@@ -1,30 +1,76 @@
 import logging
-from llama_index.core import Document, VectorStoreIndex, Settings, StorageContext, load_index_from_storage
+import os
+import datetime
+import pandas as pd
 from sqlalchemy import text
 from common.models import SessionLocal
-import datetime
-import os
-from service.rag_service.llm import config_llm
-import pandas as pd
+
+# LlamaIndex 核心
+from llama_index.core import Document, VectorStoreIndex, Settings
+# SiliconFlow 原生适配
+from llama_index.llms.siliconflow import SiliconFlow
+from llama_index.embeddings.siliconflow import SiliconFlowEmbedding
+from llama_index.postprocessor.siliconflow_rerank import SiliconFlowRerank
 
 logger = logging.getLogger("NewsRAG")
 
-# 持久化索引保存路径
-PERSIST_DIR = "./storage/news_index"
+# =============================================================================
+# 1. 强制硬编码配置 (唯一真相，避免任何环境变量干扰)
+# =============================================================================
+SF_KEY = "sk-nvfzirhgdkcpgmxhzrtpxcywpmlyrsrjhycowlirtfxjtokd"
+LLM_MODEL = "deepseek-ai/DeepSeek-V3"
+EMBED_MODEL = "BAAI/bge-m3"
+RERANKER_MODEL = "BAAI/bge-reranker-v2-m3"
 
 class NewsRAGService:
     def __init__(self):
-        # 1. 配置 LLM, Embedding, Reranker
-        llm, emb, reranker = config_llm()
-        Settings.llm = llm
-        Settings.embed_model = emb
-        self.reranker = reranker
+        logger.info("🚀 正在初始化 RAG 系统 (Native SiliconFlow 模式)...")
+        
+        # 强制清理并注入环境变量
+        os.environ["SILICONFLOW_API_KEY"] = SF_KEY
+        
+        # 1. 配置 LLM
+        self.llm = SiliconFlow(
+            model=LLM_MODEL,
+            api_key=SF_KEY,
+            max_tokens=2048,
+            temperature=0.1,
+            timeout=600
+        )
+        
+        # 2. 配置 Embedding
+        self.embed_model = SiliconFlowEmbedding(
+            model_name=EMBED_MODEL,
+            api_key=SF_KEY
+        )
+        
+        # 3. 配置 Reranker
+        self.reranker = SiliconFlowRerank(
+            model=RERANKER_MODEL,
+            api_key=SF_KEY,
+            top_n=5
+        )
+        
+        # 设置全局 Settings
+        Settings.llm = self.llm
+        Settings.embed_model = self.embed_model
+        
         self.index = None
         self.last_update = None
         
-        # 确保存储目录存在
-        if not os.path.exists(PERSIST_DIR):
-            os.makedirs(PERSIST_DIR, exist_ok=True)
+        # 启动自检
+        self.test_connectivity()
+
+    def test_connectivity(self):
+        """预飞行检查：确保 API Key 在 SiliconFlow 侧有效"""
+        try:
+            logger.info(f"--- [RAG 连通性测试] ---")
+            # 尝试一个极简生成
+            self.llm.complete("Hi")
+            logger.info("✅ LLM 鉴权成功！")
+        except Exception as e:
+            logger.error(f"❌ LLM 鉴权失败: {str(e)}")
+            logger.error(f"请检查 API Key: {SF_KEY[:10]}...{SF_KEY[-5:]} 是否有效或有余额。")
 
     def fetch_last_7d_news(self):
         """从数据库获取过去 7 天的新闻"""
@@ -44,60 +90,47 @@ class NewsRAGService:
             session.close()
 
     def rebuild_index(self):
-        """构建/刷新索引。采用方案：每次加载 7 天数据在内存中构建，简单且能保证时效性"""
+        """构建/刷新内存索引"""
         df = self.fetch_last_7d_news()
         if df.empty:
-            logger.warning("No news data found for the last 7 days.")
+            logger.warning("数据库中暂无过去 7 天的新闻。")
             return False
 
         documents = []
         for _, row in df.iterrows():
-            # 强化上下文信息，帮助 LLM 更好理解新闻背景
             content = (
                 f"新闻日期: {row['event_date']}\n"
                 f"涉及国家: {row['country_code']}\n"
-                f"新闻类别: {row['category']}\n"
-                f"新闻标题: {row['title_zh']}\n"
-                f"详细内容: {row['summary_zh']}"
+                f"类别: {row['category']}\n"
+                f"标题: {row['title_zh']}\n"
+                f"摘要: {row['summary_zh']}"
             )
-            doc = Document(
-                text=content,
-                metadata={
-                    "country": row['country_code'],
-                    "date": str(row['event_date']),
-                    "category": row['category']
-                }
-            )
+            doc = Document(text=content, metadata={"country": row['country_code']})
             documents.append(doc)
 
-        # 在内存中创建索引。由于只有 7 天数据，规模通常在几千条以内，内存构建非常快。
         self.index = VectorStoreIndex.from_documents(documents)
         self.last_update = datetime.datetime.now()
-        logger.info(f"✅ RAG 索引已重建，包含过去 7 天的 {len(documents)} 条新闻。")
+        logger.info(f"✅ RAG 索引已重建，包含 {len(documents)} 条新闻。")
         return True
 
     def query(self, query_str):
-        """执行 RAG 查询"""
-        # 如果索引不存在或超过 2 小时未更新，则重建
+        """执行 RAG 查询 (支持流式输出)"""
+        # 缓存逻辑：2 小时刷新一次
         if not self.index or (datetime.datetime.now() - self.last_update).total_seconds() > 7200:
             self.rebuild_index()
 
         if not self.index:
-            return type('obj', (object,), {'response_gen': iter(["数据库中暂无过去 7 天的新闻数据，请稍后再试。"])})
+            # 返回一个模拟的流对象
+            return type('obj', (object,), {'response_gen': iter(["抱歉，目前数据库中没有过去 7 天的新闻记录，无法回答。"])})
 
-        # 配置查询引擎
-        node_postprocessors = [self.reranker] if self.reranker else []
         query_engine = self.index.as_query_engine(
             similarity_top_k=8,
-            node_postprocessors=node_postprocessors,
+            node_postprocessors=[self.reranker],
             streaming=True
         )
         
-        # 自动在 query 中注入“最近 7 天”的背景提示
         refined_query = f"基于过去 7 天的新闻报道，请回答：{query_str}。如果新闻中没有相关信息，请明确告知。"
-        
-        response = query_engine.query(refined_query)
-        return response
+        return query_engine.query(refined_query)
 
 # 全局单例
 news_rag_service = NewsRAGService()
