@@ -210,7 +210,7 @@ def render_map(country_name="全部", continent_name="全部"):
     fig.update_layout(
         margin={"r":0,"t":40,"l":0,"b":0},
         height=800,
-        colorcontinuousbar_title="风险指数",
+        coloraxis_colorbar_title="风险指数",
         # 汉化播放控制
         sliders=[{"currentvalue": {"prefix": "日期: "}}]
     )
