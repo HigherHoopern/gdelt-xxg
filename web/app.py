@@ -431,9 +431,9 @@ with gr.Blocks(title="XterAI全球地缘政治风险分析平台") as demo:
         with gr.Column(scale=4): 
             gr.Markdown("# 🌍 XterAI全球地缘政治风险分析平台")
         with gr.Column(scale=1): 
-            continent_selector = gr.Dropdown(choices=["全部"] + list(CONTINENT_MAPPING.values()), value="全部", label=None, placeholder="🗺️ 区域筛选", show_label=False)
+            continent_selector = gr.Dropdown(choices=["全部"] + list(CONTINENT_MAPPING.values()), value="全部", label="🗺️ 区域", show_label=True)
         with gr.Column(scale=1): 
-            country_selector = gr.Dropdown(choices=get_dynamic_country_choices(), value="全部", label=None, placeholder="🌐 国家筛选", show_label=False)
+            country_selector = gr.Dropdown(choices=get_dynamic_country_choices(), value="全部", label="🌐 国家", show_label=True)
 
     with gr.Tabs() as tabs:
         with gr.TabItem("🗺️ 风险动态地图", id="map_tab") as tab_map:
