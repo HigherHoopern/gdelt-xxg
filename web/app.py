@@ -426,14 +426,14 @@ def rag_chat(query, history):
         yield full_response
 
 # Gradio 界面
-with gr.Blocks(title="全球地缘政治风险分析平台") as demo:
-    with gr.Row(variant="compact"):
-        with gr.Column(scale=3): 
-            gr.Markdown("# 🌍 全球地缘政治风险分析平台")
+with gr.Blocks(title="XterAI全球地缘政治风险分析平台") as demo:
+    with gr.Row(variant="compact", elem_id="top-bar"):
+        with gr.Column(scale=4): 
+            gr.Markdown("# 🌍 XterAI全球地缘政治风险分析平台")
         with gr.Column(scale=1): 
-            continent_selector = gr.Dropdown(choices=["全部"] + list(CONTINENT_MAPPING.values()), value="全部", label="🗺️ 区域筛选")
+            continent_selector = gr.Dropdown(choices=["全部"] + list(CONTINENT_MAPPING.values()), value="全部", label=None, placeholder="🗺️ 区域筛选", show_label=False)
         with gr.Column(scale=1): 
-            country_selector = gr.Dropdown(choices=get_dynamic_country_choices(), value="全部", label="🌐 国家筛选")
+            country_selector = gr.Dropdown(choices=get_dynamic_country_choices(), value="全部", label=None, placeholder="🌐 国家筛选", show_label=False)
 
     with gr.Tabs() as tabs:
         with gr.TabItem("🗺️ 风险动态地图", id="map_tab") as tab_map:
@@ -525,9 +525,14 @@ if __name__ == "__main__":
         css=f"""
         .gradio-container {{max-width: 98% !important; background-color: #F7F9F9 !important;}}
         footer {{display: none !important;}}
+        #top-bar {{ align-items: center; margin-bottom: -10px; padding: 0; }}
+        #top-bar .markdown-text h1 {{ margin: 0; font-size: 1.6rem; color: {PRIMARY_COLOR}; font-weight: 800; }}
+        .tabs {{ border: none !important; background: transparent !important; }}
+        .tab-nav {{ background: transparent !important; border-bottom: 1px solid #ddd !important; margin-bottom: 15px; padding-top: 10px; }}
+        .tab-nav button {{ font-weight: bold !important; font-size: 1.05rem !important; }}
         button.primary, .gr-button-primary {{ background-color: {PRIMARY_COLOR} !important; color: {ACCENT_COLOR} !important; border-radius: 8px !important; }}
         button.primary:hover, .gr-button-primary:hover {{ background-color: #00696a !important; color: #FFFFFF !important; }}
-        .tabs .tabitem.selected {{ border-color: {PRIMARY_COLOR} !important; }}
+        .tabs .tabitem.selected {{ border-color: {PRIMARY_COLOR} !important; border-bottom-width: 3px !important; color: {PRIMARY_COLOR} !important; }}
         #ai-report-container {{ height: 1000px !important; border: 1px solid #e0e0e0; padding: 15px; border-radius: 8px; background: #ffffff; box-shadow: 0 2px 12px rgba(0,0,0,0.08); display: flex !important; flex-direction: column !important; }}
         #ai-report-scroll-area {{ flex-grow: 1 !important; height: 850px !important; overflow-y: auto !important; border-top: 1px solid #eee; margin-top: 10px; padding-top: 10px; }}
         #ai-report-box {{ min-height: 100%; font-family: sans-serif; line-height: 1.5; color: #2c3e50; }}

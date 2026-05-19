@@ -60,7 +60,7 @@ def run_predictor():
 from common.models import init_db
 
 if __name__ == "__main__":
-    logger.info("=== 全球地缘政治风险分析平台后台已启动 ===")
+    logger.info("=== XterAI全球地缘政治风险分析平台后台已启动 ===")
     
     logger.info("正在初始化数据库结构...")
     init_db()
